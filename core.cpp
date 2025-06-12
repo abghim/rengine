@@ -5,12 +5,35 @@
 #define WIDTH	1400.0f
 #define HEIGHT	800.0f
 
+
 struct vec3d {
 	double x, y, z;
+	
+	vec3d(double xval, double yval, double zval) {
+		x = xval;
+		y = yval;
+		z = zval;
+	}
 };
 
 struct mat4x4 {
 	double m[4][4];
+
+	vec3d operator*(const vec3d &in) const
+	{
+		vec3d result;
+		result.x = in.x * m[0][0] + in.y * m[0][1] + in.z * m[0][2] + m[0][3];
+		result.y = in.x * m[1][0] + in.y * m[1][1] + in.z * m[1][2] + m[1][3];
+		result.z = in.x * m[2][0] + in.y * m[2][1] + in.z * m[2][2] + m[2][3];
+		double w = in.x * m[3][0] + in.y * m[3][1] + in.z * m[3][2] + m[3][3];
+
+		if (w != 0.0)
+		{
+			result.x /= w; result.y /= w; result.z /= w;
+		}
+
+		return result;
+	}
 };
 
 struct triangle {
@@ -32,87 +55,53 @@ struct actor {
 void matprint(mat4x4 m);
 void vecprint(vec3d v);
 
-class camera
+class Camera
 {
 	protected:
 
 		mat4x4 project;
-		mat4x4 rotx, roty, rotz;
-		mat4x4 transx, transy, transz;
+		mat4x4 view;
 
 		vec3d rot, pos;
-		
-		float width, height;
+		vec3d screendim;
 
-		void mul(vec3d *in, mat4x4 *m, vec3d *result);
+		/* internal functions, invoked by Camera and updatepos/rot */
+		void updateview(double x, double y, double z, double yaw, double pitch, double roll);
+		void setcam(double fov, double znear, double zfar);
 	
 	public:
-		void setcam(double fov, double znear, double zfar);
+		Camera(vec3d pos, vec3d rot, double fov, double znear, double zfar);
 
-		void apply(vec3d *in, vec3d *out);
+		void updatepos(vec3d pos);
+		void updaterot(vec3d rot); /* these two funcs update the view matrix via updateview */
+		
+		vec3d getpos()
+		{
+			return pos;
+		}
+
+		vec3d getrot()
+		{
+			return rot;
+		}
+
+		vec3d apply(vec3d in);
 };
 
-void camera::mul(vec3d *in, mat4x4 *m, vec3d *result)
-{
-	result->x = in->x * m->m[0][0] + in->y * m->m[1][0] + in->z * m->m[2][0] + m->m[3][0];
-	result->y = in->x * m->m[0][1] + in->y * m->m[1][1] + in->z * m->m[2][1] + m->m[3][1];
-	result->z = in->x * m->m[0][2] + in->y * m->m[1][2] + in->z * m->m[2][2] + m->m[3][2];
-	double w = in->x * m->m[0][3] + in->y * m->m[1][3] + in->z * m->m[2][3] + m->m[3][3];
-
-	if (w != 0.0f)
-	{
-		result->x /= w; result->y /= w; result->z /= w;
-	}
-
-	return;
-}
-
-void camera::setcam(double fov, double znear, double zfar) 
+void Camera::setcam(double fov, double znear, double zfar) 
 {
 	double v1 = 1.0f/tan(RAD(fov*0.5f));
-	project.m[0][0] = (HEIGHT/WIDTH) * v1;
+	project.m[0][0] = (screendim.x/screendim.y) * v1;
 	project.m[1][1] = v1;
-	project.m[2][2] = zfar/(zfar-znear);
-	project.m[3][2] = -(znear*zfar)/(zfar-znear);
-	project.m[2][3] = 1.0f;
+	project.m[2][2] = -(zfar+z_near)/(zfar-znear);
+	project.m[3][2] = -1.0f;
+	project.m[2][3] = -2*z_far*z_near/(z_far-z_near);
 	
 	return;
 }
-
-void camera::setrotation(double x, double y, double z)
+vec3d Camera::apply(vec3d in)
 {
-    double cx = cos(RAD(x)), sx = -sin(RAD(x));  // cos and sin of roll (x-axis)
-    double cy = cos(RAD(y)), sy = -sin(RAD(y));  // cos and sin of pitch (y-axis)
-    double cz = cos(RAD(z)), sz = -sin(RAD(z));  // cos and sin of yaw (z-axis)
-
-    rotx.m[0][0] = 1; rotx.m[0][1] = 0; rotx.m[0][2] = 0; rotx.m[0][3] = 0;
-    rotx.m[1][0] = 0; rotx.m[1][1] = cx; rotx.m[1][2] = sx; rotx.m[1][3] = 0;
-    rotx.m[2][0] = 0; rotx.m[2][1] = -sx; rotx.m[2][2] = cx; rotx.m[2][3] = 0;
-    rotx.m[3][0] = 0; rotx.m[3][1] = 0; rotx.m[3][2] = 0; rotx.m[3][3] = 1;
-
-    roty.m[0][0] = cy; roty.m[0][1] = 0; roty.m[0][2] = -sy; roty.m[0][3] = 0;
-    roty.m[1][0] = 0; roty.m[1][1] = 1; roty.m[1][2] = 0; roty.m[1][3] = 0;
-    roty.m[2][0] = sy; roty.m[2][1] = 0; roty.m[2][2] = cy; roty.m[2][3] = 0;
-    roty.m[3][0] = 0; roty.m[3][1] = 0; roty.m[3][2] = 0; roty.m[3][3] = 1;
-
-    rotz.m[0][0] = cz; rotz.m[0][1] = sz; rotz.m[0][2] = 0; rotz.m[0][3] = 0;
-    rotz.m[1][0] = -sz; rotz.m[1][1] = cz; rotz.m[1][2] = 0; rotz.m[1][3] = 0;
-    rotz.m[2][0] = 0; rotz.m[2][1] = 0; rotz.m[2][2] = 1; rotz.m[2][3] = 0;
-    rotz.m[3][0] = 0; rotz.m[3][1] = 0; rotz.m[3][2] = 0; rotz.m[3][3] = 1;
-	
-	return;
-}
-
-void camera::apply(vec3d *in, vec3d *out)
-{
-	vec3d t1; vec3d t2; vec3d t3;
-
-	mul(in, &roty, &t1);
-	mul(&t1, &rotz, &t2);
-	mul(&t2, &rotx, &t3);
-	mul(&t3, &project, out);
-
-	return;
+	return project*(view*in);
 }
 
 void matprint(mat4x4 m)
@@ -133,18 +122,5 @@ void vecprint(vec3d v)
 
 int main()
 {
-	vec3d vec = {200.3f, 311.1f, 808.8f};
-	vec3d applied;
-
-	camera test;
-
-	test.setcam(150.0f, 0.1f, 1000.0f);
-	test.setrotation(60.0f, -80.1f, 45.0f);
-	
-	test.apply(&vec, &applied);
-
-	vecprint(vec);
-	vecprint(applied);
-
-	return 0;
+		return 0;
 }
