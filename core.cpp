@@ -67,6 +67,10 @@ struct actor {
 	vec3d rotate;
 	double scale;
 
+	actor(mesh &m) {
+		self->model = m;
+	}
+
 	vec3d apply(vec3d); /* to be added later */
 };
 
@@ -211,36 +215,90 @@ void Camera::setcam(double fov, double znear, double zfar, double width, double 
 
 /*
 
- +----------------------- 
+ +----------------------+ 
  | shader               |
- +-----------------------
+ +----------------------+
 
  */
 
+vec3d subtract(const vec3d &a, const vec3d &b) {
+    return {a.x - b.x, a.y - b.y, a.z - b.z};
+}
+
+vec3d cross(const vec3d &a, const vec3d &b) {
+    return {
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    };
+}
+
+double dot(const vec3d &a, const vec3d &b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+vec3d normalize(const vec3d &v) {
+    double mag = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    return {v.x / mag, v.y / mag, v.z / mag};
+}
+
+vec3d calculateUnitNormal(const vec3d &p1, const vec3d &p2, const vec3d &p3) {
+    vec3d edge1 = subtract(p2, p1);
+    vec3d edge2 = subtract(p3, p1);
+    vec3d normal = cross(edge1, edge2);
+    return normalize(normal);
+}
+
+vec3d reflectedDirection(const vec3d &L, const vec3d &N) {
+    double dotLN = dot(L, N);
+    return {L.x - 2 * dotLN * N.x, L.y - 2 * dotLN * N.y, L.z - 2 * dotLN * N.z};
+}
 class Shader {
 
-	
+	/* vector<Lightsrc> lights; */
+
+	/* current light: directional light source facing -y */
+
+	public:
+		rgb apply(vec3d v1, vec3d v2, vec3d v3, vec3d campos) 
+			/* triangle-level shading -- pixel-level to be added */
+		{
+			vec3d l(0.0, -100.0, 0.0);
+			vec3d r = reflectedDirection(l, calculateUnitNormal(v1, v2, v3));
+			
+			rgb color;
+			color.r = dot(subtract(campos, v1), r);
+			color.g = dot(subtract(campos, v1), g);
+			color.b = dot(subtract(campos, v1), b);
+			return color;
+		}
 }
 
 
 /*
 
- +-------------------------
+ +------------------------+
  | scene (final assembly) |
- +-------------------------
+ +------------------------+
 
  */
 
 class Scene {
+	
+	public:
+		actor object;
+		Camera camera;
+		Shader shader;
 
+		Scene() : camera()
 };
 
 
 /*
 
- +-----------------------
+ +----------------------+
  | main function        |
- +-----------------------
+ +----------------------+
 
  */
 
