@@ -1,14 +1,18 @@
 #include <math.h>
 #include <stdio.h>
 
-#define RAD(a)	((a)*3.141592/180)
-#define WIDTH	1400.0f
-#define HEIGHT	800.0f
+/*
 
+ +----------------------- 
+ | declarations         |
+ +-----------------------
+
+ */
 
 struct vec3d {
 	double x, y, z;
-	
+
+	vec3d() = default;
 	vec3d(double xval, double yval, double zval) {
 		x = xval;
 		y = yval;
@@ -36,24 +40,64 @@ struct mat4x4 {
 	}
 };
 
-struct triangle {
+struct rgb {
+	unsigned char r, g, b;
+}
+
+struct triangle3d {
 	vec3d p[3];
-	vec3d color;
+	rgb color;
+};
+
+struct triangle {
+	int i1, i2, i3;
+	rgb color;
 };
 
 struct mesh {
-	triangle *list;
+	vec3d *vertexes;
+	triangle *faces;
+    
+	/* add fromobj functionality */
 };
 
 struct actor {
-	mesh *model;
+	mesh &model;
 	vec3d translate;
 	vec3d rotate;
-	float scale;
+	double scale;
+
+	vec3d apply(vec3d); /* to be added later */
 };
 
 void matprint(mat4x4 m);
 void vecprint(vec3d v);
+
+void matprint(mat4x4 m)
+{
+	for (int i=0; i<4; i++) {
+		for (int j=0; j<4; j++) {
+			printf("%4f\t", m.m[i][j]);
+		} printf("\n");
+	}
+	return;
+}
+
+void vecprint(vec3d v)
+{
+	printf("(%4f, %4f, %4f)\n", v.x, v.y, v.z);
+	return;
+}
+
+
+
+/*
+
+ +----------------------- 
+ | camera               |
+ +-----------------------
+
+ */
 
 class Camera
 {
@@ -63,64 +107,144 @@ class Camera
 		mat4x4 view;
 
 		vec3d rot, pos;
-		vec3d screendim;
+		double width, height;
 
 		/* internal functions, invoked by Camera and updatepos/rot */
 		void updateview(double x, double y, double z, double yaw, double pitch, double roll);
-		void setcam(double fov, double znear, double zfar);
+		void setcam(double fov, double znear, double zfar, double width, double height);
 	
 	public:
-		Camera(vec3d pos, vec3d rot, double fov, double znear, double zfar);
-
-		void updatepos(vec3d pos);
-		void updaterot(vec3d rot); /* these two funcs update the view matrix via updateview */
-		
-		vec3d getpos()
+		Camera(vec3d pos, vec3d rot, double fov, double znear, double zfar, double width, double height)
 		{
-			return pos;
+			this->pos = pos;
+			this->rot = rot;
+			setcam(fov, znear, zfar, width, height);
+			updateview(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z);
 		}
 
-		vec3d getrot()
+		Camera(double x, double y, double z, double yaw, double pitch, double roll,  double fov, double znear, double zfar, double width, double height)
 		{
-			return rot;
+			pos.x = x; pos.y = y; pos.z = z;
+			rot.x = yaw; rot.y = pitch; rot.z = roll;
+			setcam(fov, znear, zfar, width, height);
+			updateview(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z);
 		}
 
-		vec3d apply(vec3d in);
+		void updatepos(vec3d pos)
+		{
+			this->pos = pos;
+			updateview(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z);
+		}
+
+		void updaterot(vec3d rot) /* these two funcs update the view matrix via updateview */
+		{
+			this->rot = rot;
+			updateview(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z);
+		}
+
+		void updatepos(double x, double y, double z)
+		{
+			pos.x = x; pos.y = y; pos.z = z;
+			updateview(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z);
+		}
+
+		void updaterot(double yaw, double pitch, double roll) /* these two funcs update the view matrix via updateview */
+		{
+			rot.x = yaw; rot.y = pitch; rot.z = roll;
+			updateview(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z);
+		}
+
+		vec3d getpos() { return pos; }
+		vec3d getrot() { return rot; }
+		mat4x4 getproject() { return project; }
+		mat4x4 getview() { return view; }
+
+		vec3d apply(vec3d in)
+		{
+		    return project*(view*in);
+		}
 };
 
-void Camera::setcam(double fov, double znear, double zfar) 
+void Camera::updateview(double x, double y, double z, double yaw, double pitch, double roll)
 {
-	double v1 = 1.0f/tan(RAD(fov*0.5f));
-	project.m[0][0] = (screendim.x/screendim.y) * v1;
-	project.m[1][1] = v1;
-	project.m[2][2] = -(zfar+z_near)/(zfar-znear);
-	project.m[3][2] = -1.0f;
-	project.m[2][3] = -2*z_far*z_near/(z_far-z_near);
+	double cy = cos(yaw),   sy = sin(yaw);
+    double cp = cos(pitch), sp = sin(pitch);
+    double cr = cos(roll),  sr = sin(roll);
+
+    double Rx =  cy*cr + sy*sp*sr;
+    double Ry =       cp*sr;
+    double Rz = -sy*cr + cy*sp*sr;
+
+    double Ux = -cy*sr + sy*sp*cr;
+    double Uy =        cp*cr;
+    double Uz =  sy*sr + cy*sp*cr;
+
+    double Fx =  sy*cp;
+    double Fy = -sp;
+    double Fz =  cy*cp;
+    
+	view.m[0][0] = Rx;  view.m[0][1] = Ry;  view.m[0][2] = Rz;
+    view.m[1][0] = Ux;  view.m[1][1] = Uy;  view.m[1][2] = Uz;
+    view.m[2][0] = Fx;  view.m[2][1] = Fy;  view.m[2][2] = Fz;
+
+    view.m[0][3] = -(Rx*x + Ry*y + Rz*z);
+    view.m[1][3] = -(Ux*x + Uy*y + Uz*z);
+    view.m[2][3] = -(Fx*x + Fy*y + Fz*z);
+
+    view.m[3][0] = 0.0;  view.m[3][1] = 0.0;  view.m[3][2] = 0.0;  view.m[3][3] = 1.0;
 	
 	return;
 }
-vec3d Camera::apply(vec3d in)
-{
-	return project*(view*in);
-}
 
-void matprint(mat4x4 m)
+void Camera::setcam(double fov, double znear, double zfar, double width, double height) 
 {
-	for (int i=0; i<4; i++) {
-		for (int j=0; j<4; j++) {
-			printf("%2f\t", m.m[i][j]);
-		} printf("\n");
-	}
+	project = {};
+	double v1 = 1.0/tan(fov*0.5);
+	project.m[0][0] = (height/width) * v1;
+	project.m[1][1] = v1;
+	project.m[2][2] = -(zfar+znear)/(zfar-znear);
+	project.m[3][2] = -1.0;
+	project.m[2][3] = -2*zfar*znear/(zfar-znear);
+	
 	return;
 }
 
-void vecprint(vec3d v)
-{
-	printf("(%2f, %2f, %2f)\n", v.x, v.y, v.z);
-	return;
+/*
+
+ +----------------------- 
+ | shader               |
+ +-----------------------
+
+ */
+
+class Shader {
+
+	
 }
+
+
+/*
+
+ +-------------------------
+ | scene (final assembly) |
+ +-------------------------
+
+ */
+
+class Scene {
+
+};
+
+
+/*
+
+ +-----------------------
+ | main function        |
+ +-----------------------
+
+ */
 
 int main()
 {
-		return 0;
+	return 0;
 }
