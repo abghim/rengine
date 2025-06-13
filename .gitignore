@@ -1,0 +1,9 @@
+# vim swap file
+*.swp
+
+# source
+rengine
+*.o
+
+# OS files
+.DS_Store
