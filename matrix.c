@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 #include "matrix.h"
 
 /* matrix[row][column] */
 
-matrix *matalloc[MAXMAT]; 
+matrix *matalloc[MAXMAT];
 int matnumalloc = 0;
 
 matrix *matnew(int row, int col)
@@ -56,16 +57,16 @@ void matmuleq(matrix *to, matrix *with)
 				sum += matget(to, r, k) *  matget(with, k, c);
 			} matput(temp, r, c, sum);
 		}
-	} 
+	}
 
 	if (to->col != n) to->data = realloc(to->data, sizeof(double)*(with->col)*(to->row));
-	
+
 	to->col = with->col;
 	for (int i=0; i<to->row; i++) {
 		for (int j=0; j<to->col; j++) {
 			matput(to, i, j, matget(temp, i, j));
 		}
-	} 
+	}
 
 	return;
 }
@@ -88,7 +89,7 @@ matrix *matmul(matrix *to, matrix *with)
 
 	if (to->col != with->row) {
 		fprintf(stderr, "matrix: mul operation not defined");
-		return;
+		return NULL;
 	}
 
 	int n = to->col;
