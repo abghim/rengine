@@ -3,7 +3,7 @@
 
 /*
 
- +----------------------- 
+ +-----------------------
  | declarations         |
  +-----------------------
 
@@ -42,7 +42,7 @@ struct mat4x4 {
 
 struct rgb {
 	unsigned char r, g, b;
-}
+};
 
 struct triangle3d {
 	vec3d p[3];
@@ -57,7 +57,7 @@ struct triangle {
 struct mesh {
 	vec3d *vertexes;
 	triangle *faces;
-    
+
 	/* add fromobj functionality */
 };
 
@@ -97,7 +97,7 @@ void vecprint(vec3d v)
 
 /*
 
- +----------------------- 
+ +-----------------------
  | camera               |
  +-----------------------
 
@@ -116,7 +116,7 @@ class Camera
 		/* internal functions, invoked by Camera and updatepos/rot */
 		void updateview(double x, double y, double z, double yaw, double pitch, double roll);
 		void setcam(double fov, double znear, double zfar, double width, double height);
-	
+
 	public:
 		Camera(vec3d pos, vec3d rot, double fov, double znear, double zfar, double width, double height)
 		{
@@ -186,7 +186,7 @@ void Camera::updateview(double x, double y, double z, double yaw, double pitch, 
     double Fx =  sy*cp;
     double Fy = -sp;
     double Fz =  cy*cp;
-    
+
 	view.m[0][0] = Rx;  view.m[0][1] = Ry;  view.m[0][2] = Rz;
     view.m[1][0] = Ux;  view.m[1][1] = Uy;  view.m[1][2] = Uz;
     view.m[2][0] = Fx;  view.m[2][1] = Fy;  view.m[2][2] = Fz;
@@ -196,11 +196,11 @@ void Camera::updateview(double x, double y, double z, double yaw, double pitch, 
     view.m[2][3] = -(Fx*x + Fy*y + Fz*z);
 
     view.m[3][0] = 0.0;  view.m[3][1] = 0.0;  view.m[3][2] = 0.0;  view.m[3][3] = 1.0;
-	
+
 	return;
 }
 
-void Camera::setcam(double fov, double znear, double zfar, double width, double height) 
+void Camera::setcam(double fov, double znear, double zfar, double width, double height)
 {
 	project = {};
 	double v1 = 1.0/tan(fov*0.5);
@@ -209,13 +209,13 @@ void Camera::setcam(double fov, double znear, double zfar, double width, double 
 	project.m[2][2] = -(zfar+znear)/(zfar-znear);
 	project.m[3][2] = -1.0;
 	project.m[2][3] = -2*zfar*znear/(zfar-znear);
-	
+
 	return;
 }
 
 /*
 
- +----------------------+ 
+ +----------------------+
  | shader               |
  +----------------------+
 
@@ -260,12 +260,12 @@ class Shader {
 	/* current light: directional light source facing -y */
 
 	public:
-		rgb apply(vec3d v1, vec3d v2, vec3d v3, vec3d campos) 
+		rgb apply(vec3d v1, vec3d v2, vec3d v3, vec3d campos)
 			/* triangle-level shading -- pixel-level to be added */
 		{
 			vec3d l(0.0, -100.0, 0.0);
 			vec3d r = reflectedDirection(l, calculateUnitNormal(v1, v2, v3));
-			
+
 			rgb color;
 			color.r = dot(subtract(campos, v1), r);
 			color.g = dot(subtract(campos, v1), g);
@@ -284,7 +284,7 @@ class Shader {
  */
 
 class Scene {
-	
+
 	public:
 		actor object;
 		Camera camera;
