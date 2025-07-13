@@ -337,9 +337,9 @@ vec3d reflectedDirection(const vec3d &L, const vec3d &N)
 
 class Shader {
 
-	/* vector<Lightsrc> lights; */
+	/* add later: vector<Lightsrc> lights; */
 
-	/* current light: directional light source facing -y */
+	/* current light: directional light source facing -y axis */
 
 	public:
 		rgb apply(vec3d v1, vec3d v2, vec3d v3, vec3d campos)
