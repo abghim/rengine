@@ -1,5 +1,16 @@
+#include <cmath>
+#include <cstddef>
+#include <cstdio>
+#include <fstream>
 #include <math.h>
 #include <stdio.h>
+#include <iostream>
+#include <strstream>
+#include <vector>
+
+using std::ifstream;
+using std::strstream;
+using std::vector;
 
 /*
 
@@ -12,7 +23,10 @@
 struct vec3d {
 	double x, y, z;
 
-	vec3d() = default;
+	vec3d() {
+	    x = 0; y = 0; z = 0;
+	}
+
 	vec3d(double xval, double yval, double zval)
 	{
 		x = xval;
@@ -54,6 +68,9 @@ struct mat4x4 {
 
 struct rgb {
 	unsigned char r, g, b;
+	rgb(unsigned char r, unsigned char g, unsigned char b) {
+	    this->r = r; this->g = g; this->b = b;
+	}
 };
 
 struct triangle3d {
@@ -64,13 +81,60 @@ struct triangle3d {
 struct triangle {
 	int i1, i2, i3;
 	rgb color;
+
+	triangle() : color(0, 0, 0) {
+        i1 = 0; i2 = 0; i3 = 0;
+	}
 };
 
 struct mesh {
-	vec3d *vertexes;
-	triangle *faces;
+	vector<vec3d> vertexes;
+	vector<triangle> faces;
 
-	/* add fromobj functionality */
+	/* modified from javidx9's console 3d graphics engine (https://github.com/OneLoneCoder/Javidx9/blob/master/ConsoleGameEngine/BiggerProjects/Engine3D/OneLoneCoder_olcEngine3D_Part2.cpp) */
+	mesh(const char *filename)
+	{
+		ifstream f(filename);
+
+		while (!f.eof())
+		{
+			char line[128];
+			f.getline(line, 128);
+
+			strstream s;
+			s << line;
+
+			char junk;
+
+			if (line[0] == 'v')
+			{
+				vec3d v;
+				s >> junk >> v.x >> v.y >> v.z;
+				vertexes.push_back(v);
+			}
+
+			if (line[0] == 'f')
+			{
+                triangle face;
+
+				s >> junk >> face.i1 >> face.i2 >> face.i3;
+
+				faces.push_back(face);
+			}
+		}
+
+	}
+
+	void print() {
+	    int i = 1;
+        for (triangle face : faces) {
+            printf("\nface #%d: \n", i++);
+            printf("\t"); vertexes[face.i1].print();
+            printf("\t"); vertexes[face.i2].print();
+            printf("\t"); vertexes[face.i3].print();
+        } return;
+	}
+
 };
 
 struct actor {
@@ -175,7 +239,7 @@ class Camera
 		mat4x4 getproject() { return project; }
 		mat4x4 getview() { return view; }
 
-		vec3d apply(vec3d in)
+		vec3d apply(vec3d &in)
 		{
 		    return project*(view*in);
 		}
@@ -284,7 +348,7 @@ class Shader {
 			vec3d l(0.0, -1.0, 0.0);
 			vec3d r = reflectedDirection(l, calculateUnitNormal(v1, v2, v3));
 
-			rgb color;
+			rgb color(0, 0, 0);
 			color.r = (int) dot(campos -v1, r)*255;
 			color.g = (int) dot(campos-v1, r)*255;
 			color.b = (int) dot(campos-v1, r)*255;
@@ -301,6 +365,8 @@ class Shader {
 
  */
 
+
+
 class Scene {
 
 	public:
@@ -308,6 +374,14 @@ class Scene {
 		Camera camera;
 		Shader shader;
 
+		/* simple obj viewer (no complex scene, no actor transforms) */
+		Scene(mesh *meshobj, /* cameara */ double x, double y, double z, double yaw, double pitch, double roll,  double fov, double znear, double zfar, double width, double height /* no shader settings */): camera(x, y, z, yaw, pitch, roll, fov, znear, zfar, width, height), object(meshobj), shader(){
+            printf("Scene object initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
+		}
+
+		Scene(mesh *meshobj, /* cameara */ vec3d pos, vec3d rot,  double fov, double znear, double zfar, double width, double height /* no shader settings */): camera(pos, rot, fov, znear, zfar, width, height), object(meshobj), shader(){
+		    printf("Scene object initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
+		}
 };
 
 
@@ -322,10 +396,16 @@ class Scene {
 int main()
 {
     /* tests -> vectors */
-    vec3d a(1, 2, 3), b(4, 5, 6);
+    vec3d a(1, 2, 3), b(0, 0, 0);
     (a-b).print();
     printf("%f", dot(a, b));
     a.normalize().print();
+
+    mesh utah_mesh("utah_teapot.obj");
+
+    utah_mesh.print();
+
+    Scene(&utah_mesh, a, b, M_PI/2, 0.1, 1500, 1600, 900);
 
 	return 0;
 }
