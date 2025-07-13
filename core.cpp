@@ -62,13 +62,13 @@ struct mesh {
 };
 
 struct actor {
-	mesh &model;
+	mesh *model;
 	vec3d translate;
 	vec3d rotate;
 	double scale;
 
-	actor(mesh &m) {
-		self->model = m;
+	actor(mesh *m) {
+		this->model = m;
 	}
 
 	vec3d apply(vec3d); /* to be added later */
@@ -268,11 +268,11 @@ class Shader {
 
 			rgb color;
 			color.r = dot(subtract(campos, v1), r);
-			color.g = dot(subtract(campos, v1), g);
-			color.b = dot(subtract(campos, v1), b);
+			color.g = dot(subtract(campos, v1), r);
+			color.b = dot(subtract(campos, v1), r);
 			return color;
 		}
-}
+};
 
 
 /*
@@ -290,7 +290,6 @@ class Scene {
 		Camera camera;
 		Shader shader;
 
-		Scene() : camera()
 };
 
 
