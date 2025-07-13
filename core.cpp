@@ -13,11 +13,23 @@ struct vec3d {
 	double x, y, z;
 
 	vec3d() = default;
-	vec3d(double xval, double yval, double zval) {
+	vec3d(double xval, double yval, double zval)
+	{
 		x = xval;
 		y = yval;
 		z = zval;
 	}
+
+	void print()
+	{
+	    printf("%f, %f, %f\n", this->x, this->y, this->z);
+	}
+
+	vec3d normalize()
+	{
+        double mag = sqrt(x * x + y * y + z * z);
+        return {x / mag, y / mag, z / mag};
+    }
 };
 
 struct mat4x4 {
@@ -221,7 +233,12 @@ void Camera::setcam(double fov, double znear, double zfar, double width, double 
 
  */
 
-vec3d subtract(const vec3d &a, const vec3d &b) {
+vec3d operator+(const vec3d &a, const vec3d &b)
+{
+    return {a.x + b.x, a.y + b.y, a.z + b.z};
+}
+
+vec3d operator-(const vec3d &a, const vec3d &b) {
     return {a.x - b.x, a.y - b.y, a.z - b.z};
 }
 
@@ -233,26 +250,27 @@ vec3d cross(const vec3d &a, const vec3d &b) {
     };
 }
 
-double dot(const vec3d &a, const vec3d &b) {
+double dot(const vec3d &a, const vec3d &b)
+{
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-vec3d normalize(const vec3d &v) {
-    double mag = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-    return {v.x / mag, v.y / mag, v.z / mag};
-}
 
-vec3d calculateUnitNormal(const vec3d &p1, const vec3d &p2, const vec3d &p3) {
-    vec3d edge1 = subtract(p2, p1);
-    vec3d edge2 = subtract(p3, p1);
+
+vec3d calculateUnitNormal(const vec3d &p1, const vec3d &p2, const vec3d &p3)
+{
+    vec3d edge1 = p2 - p1;
+    vec3d edge2 = p3 - p1;
     vec3d normal = cross(edge1, edge2);
-    return normalize(normal);
+    return normal.normalize();
 }
 
-vec3d reflectedDirection(const vec3d &L, const vec3d &N) {
+vec3d reflectedDirection(const vec3d &L, const vec3d &N)
+{
     double dotLN = dot(L, N);
     return {L.x - 2 * dotLN * N.x, L.y - 2 * dotLN * N.y, L.z - 2 * dotLN * N.z};
 }
+
 class Shader {
 
 	/* vector<Lightsrc> lights; */
@@ -263,13 +281,13 @@ class Shader {
 		rgb apply(vec3d v1, vec3d v2, vec3d v3, vec3d campos)
 			/* triangle-level shading -- pixel-level to be added */
 		{
-			vec3d l(0.0, -100.0, 0.0);
+			vec3d l(0.0, -1.0, 0.0);
 			vec3d r = reflectedDirection(l, calculateUnitNormal(v1, v2, v3));
 
 			rgb color;
-			color.r = dot(subtract(campos, v1), r);
-			color.g = dot(subtract(campos, v1), r);
-			color.b = dot(subtract(campos, v1), r);
+			color.r = (int) dot(campos -v1, r)*255;
+			color.g = (int) dot(campos-v1, r)*255;
+			color.b = (int) dot(campos-v1, r)*255;
 			return color;
 		}
 };
@@ -303,5 +321,11 @@ class Scene {
 
 int main()
 {
+    /* tests -> vectors */
+    vec3d a(1, 2, 3), b(4, 5, 6);
+    (a-b).print();
+    printf("%f", dot(a, b));
+    a.normalize().print();
+
 	return 0;
 }
