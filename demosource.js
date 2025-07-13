@@ -1,0 +1,953 @@
+"use strict";
+
+// ======================================================================
+//  Low-level canvas access.
+// ======================================================================
+
+let canvas = document.getElementById("canvas");
+let canvas_context = canvas.getContext("2d");
+let canvas_buffer = canvas_context.getImageData(
+  0,
+  0,
+  canvas.width,
+  canvas.height,
+);
+
+// A color.
+function Color(r, g, b) {
+  return {
+    r,
+    g,
+    b,
+    mul: function (n) {
+      return new Color(this.r * n, this.g * n, this.b * n);
+    },
+  };
+}
+
+// The PutPixel() function.
+function PutPixel(x, y, color) {
+  x = canvas.width / 2 + (x | 0);
+  y = canvas.height / 2 - (y | 0) - 1;
+
+  if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) {
+    return;
+  }
+
+  let offset = 4 * (x + canvas_buffer.width * y);
+  canvas_buffer.data[offset++] = color.r;
+  canvas_buffer.data[offset++] = color.g;
+  canvas_buffer.data[offset++] = color.b;
+  canvas_buffer.data[offset++] = 255; // Alpha = 255 (full opacity)
+}
+
+// Displays the contents of the offscreen buffer into the canvas.
+function UpdateCanvas() {
+  canvas_context.putImageData(canvas_buffer, 0, 0);
+}
+
+// ======================================================================
+//  Depth buffer.
+// ======================================================================
+let depth_buffer = Array();
+depth_buffer.length = canvas.width * canvas.height;
+
+function UpdateDepthBufferIfCloser(x, y, inv_z) {
+  x = canvas.width / 2 + (x | 0);
+  y = canvas.height / 2 - (y | 0) - 1;
+
+  if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) {
+    return false;
+  }
+
+  let offset = x + canvas.width * y;
+  if (depth_buffer[offset] == undefined || depth_buffer[offset] < inv_z) {
+    depth_buffer[offset] = inv_z;
+    return true;
+  }
+  return false;
+}
+
+function ClearAll() {
+  canvas.width = canvas.width;
+  depth_buffer = Array();
+  depth_buffer.length = canvas.width * canvas.height;
+}
+
+// ======================================================================
+//  Data model.
+// ======================================================================
+
+// A Point.
+function Pt(x, y, h) {
+  return { x, y, h };
+}
+
+// A 3D vertex.
+function Vertex(x, y, z) {
+  return {
+    x,
+    y,
+    z,
+    add: function (v) {
+      return new Vertex(this.x + v.x, this.y + v.y, this.z + v.z);
+    },
+    sub: function (v) {
+      return new Vertex(this.x - v.x, this.y - v.y, this.z - v.z);
+    },
+    mul: function (n) {
+      return new Vertex(this.x * n, this.y * n, this.z * n);
+    },
+    dot: function (vec) {
+      return this.x * vec.x + this.y * vec.y + this.z * vec.z;
+    },
+    length: function () {
+      return Math.sqrt(this.dot(this));
+    },
+  };
+}
+
+// A 4D vertex (a 3D vertex in homogeneous coordinates).
+function Vertex4(arg1, y, z, w) {
+  if (y == undefined) {
+    this.x = arg1.x;
+    this.y = arg1.y;
+    this.z = arg1.z;
+    this.w = arg1.w | 1;
+  } else {
+    this.x = arg1;
+    this.y = y;
+    this.z = z;
+    this.w = w;
+  }
+  this.add = function (v) {
+    return new Vertex4(this.x + v.x, this.y + v.y, this.z + v.z);
+  };
+  this.sub = function (v) {
+    return new Vertex4(this.x - v.x, this.y - v.y, this.z - v.z, this.w - v.w);
+  };
+  this.mul = function (n) {
+    return new Vertex4(this.x * n, this.y * n, this.z * n, this.w);
+  };
+  this.dot = function (vec) {
+    return this.x * vec.x + this.y * vec.y + this.z * vec.z;
+  };
+  this.cross = function (v2) {
+    return new Vertex4(
+      this.y * v2.z - this.z * v2.y,
+      this.z * v2.x - this.x * v2.z,
+      this.x * v2.y - this.y * v2.x,
+    );
+  };
+  this.length = function () {
+    return Math.sqrt(this.dot(this));
+  };
+}
+
+// A 4x4 matrix.
+function Mat4x4(data) {
+  return { data };
+}
+
+const Identity4x4 = new Mat4x4([
+  [1, 0, 0, 0],
+  [0, 1, 0, 0],
+  [0, 0, 1, 0],
+  [0, 0, 0, 1],
+]);
+
+// A Triangle.
+function Triangle(indexes, color, normals) {
+  return { indexes, color, normals };
+}
+
+// A Model.
+function Model(vertices, triangles, bounds_center, bounds_radius) {
+  return { vertices, triangles, bounds_center, bounds_radius };
+}
+
+// An Instance.
+function Instance(model, position, orientation, scale) {
+  this.model = model;
+  this.position = position;
+  this.orientation = orientation || Identity4x4;
+  this.scale = scale || 1.0;
+  this.transform = MultiplyMM4(
+    MakeTranslationMatrix(this.position),
+    MultiplyMM4(this.orientation, MakeScalingMatrix(this.scale)),
+  );
+}
+
+// The Camera.
+function Camera(position, orientation) {
+  this.position = position;
+  this.orientation = orientation;
+  this.clipping_planes = [];
+}
+
+// A Clipping Plane.
+function Plane(normal, distance) {
+  return { normal, distance };
+}
+
+// A Light.
+const LT_AMBIENT = 0;
+const LT_POINT = 1;
+const LT_DIRECTIONAL = 2;
+
+function Light(type, intensity, vector) {
+  return { type, intensity, vector };
+}
+
+// ======================================================================
+//  Linear algebra and helpers.
+// ======================================================================
+
+// Makes a transform matrix for a rotation around the OY axis.
+function MakeOYRotationMatrix(degrees) {
+  let cos = Math.cos((degrees * Math.PI) / 180.0);
+  let sin = Math.sin((degrees * Math.PI) / 180.0);
+
+  return new Mat4x4([
+    [cos, 0, -sin, 0],
+    [0, 1, 0, 0],
+    [sin, 0, cos, 0],
+    [0, 0, 0, 1],
+  ]);
+}
+
+// Makes a transform matrix for a translation.
+function MakeTranslationMatrix(translation) {
+  return new Mat4x4([
+    [1, 0, 0, translation.x],
+    [0, 1, 0, translation.y],
+    [0, 0, 1, translation.z],
+    [0, 0, 0, 1],
+  ]);
+}
+
+// Makes a transform matrix for a scaling.
+function MakeScalingMatrix(scale) {
+  return new Mat4x4([
+    [scale, 0, 0, 0],
+    [0, scale, 0, 0],
+    [0, 0, scale, 0],
+    [0, 0, 0, 1],
+  ]);
+}
+
+// Multiplies a 4x4 matrix and a 4D vector.
+function MultiplyMV(mat4x4, vec4) {
+  let result = [0, 0, 0, 0];
+  let vec = [vec4.x, vec4.y, vec4.z, vec4.w];
+
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      result[i] += mat4x4.data[i][j] * vec[j];
+    }
+  }
+
+  return new Vertex4(result[0], result[1], result[2], result[3]);
+}
+
+// Multiplies two 4x4 matrices.
+function MultiplyMM4(matA, matB) {
+  let result = new Mat4x4([
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ]);
+
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      for (let k = 0; k < 4; k++) {
+        result.data[i][j] += matA.data[i][k] * matB.data[k][j];
+      }
+    }
+  }
+
+  return result;
+}
+
+// Transposes a 4x4 matrix.
+function Transposed(mat) {
+  let result = new Mat4x4([
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ]);
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      result.data[i][j] = mat.data[j][i];
+    }
+  }
+  return result;
+}
+
+// ======================================================================
+//  Rasterization code.
+// ======================================================================
+
+// Scene setup.
+let viewport_size = 1;
+let projection_plane_z = 1;
+
+function Interpolate(i0, d0, i1, d1) {
+  if (i0 == i1) {
+    return [d0];
+  }
+
+  let values = [];
+  let a = (d1 - d0) / (i1 - i0);
+  let d = d0;
+  for (let i = i0; i <= i1; i++) {
+    values.push(d);
+    d += a;
+  }
+
+  return values;
+}
+
+function DrawLine(p0, p1, color) {
+  let dx = p1.x - p0.x,
+    dy = p1.y - p0.y;
+
+  if (Math.abs(dx) > Math.abs(dy)) {
+    // The line is horizontal-ish. Make sure it's left to right.
+    if (dx < 0) {
+      let swap = p0;
+      p0 = p1;
+      p1 = swap;
+    }
+
+    // Compute the Y values and draw.
+    let ys = Interpolate(p0.x, p0.y, p1.x, p1.y);
+    for (let x = p0.x; x <= p1.x; x++) {
+      PutPixel(x, ys[(x - p0.x) | 0], color);
+    }
+  } else {
+    // The line is verical-ish. Make sure it's bottom to top.
+    if (dy < 0) {
+      let swap = p0;
+      p0 = p1;
+      p1 = swap;
+    }
+
+    // Compute the X values and draw.
+    let xs = Interpolate(p0.y, p0.x, p1.y, p1.x);
+    for (let y = p0.y; y <= p1.y; y++) {
+      PutPixel(xs[(y - p0.y) | 0], y, color);
+    }
+  }
+}
+
+function DrawWireframeTriangle(p0, p1, p2, color) {
+  DrawLine(p0, p1, color);
+  DrawLine(p1, p2, color);
+  DrawLine(p0, p2, color);
+}
+
+// Converts 2D viewport coordinates to 2D canvas coordinates.
+function ViewportToCanvas(p2d) {
+  return new Pt(
+    ((p2d.x * canvas.width) / viewport_size) | 0,
+    ((p2d.y * canvas.height) / viewport_size) | 0,
+  );
+}
+
+// Converts 2D canvas coordinates to 2D viewport coordinates.
+function CanvasToViewport(p2d) {
+  return new Pt(
+    (p2d.x * viewport_size) / canvas.width,
+    (p2d.y * viewport_size) / canvas.height,
+  );
+}
+
+function ProjectVertex(v) {
+  return ViewportToCanvas(
+    new Pt((v.x * projection_plane_z) / v.z, (v.y * projection_plane_z) / v.z),
+  );
+}
+
+function UnProjectVertex(x, y, inv_z) {
+  let oz = 1.0 / inv_z;
+  let ux = (x * oz) / projection_plane_z;
+  let uy = (y * oz) / projection_plane_z;
+  let p2d = CanvasToViewport(Pt(ux, uy));
+  return new Vertex(p2d.x, p2d.y, oz);
+}
+
+// Sort the points from bottom to top.
+// Technically, sort the indexes to the vertex indexes in the triangle from bottom to top.
+function SortedVertexIndexes(vertex_indexes, projected) {
+  let indexes = [0, 1, 2];
+
+  if (
+    projected[vertex_indexes[indexes[1]]].y <
+    projected[vertex_indexes[indexes[0]]].y
+  ) {
+    let swap = indexes[0];
+    indexes[0] = indexes[1];
+    indexes[1] = swap;
+  }
+  if (
+    projected[vertex_indexes[indexes[2]]].y <
+    projected[vertex_indexes[indexes[0]]].y
+  ) {
+    let swap = indexes[0];
+    indexes[0] = indexes[2];
+    indexes[2] = swap;
+  }
+  if (
+    projected[vertex_indexes[indexes[2]]].y <
+    projected[vertex_indexes[indexes[1]]].y
+  ) {
+    let swap = indexes[1];
+    indexes[1] = indexes[2];
+    indexes[2] = swap;
+  }
+
+  return indexes;
+}
+
+function ComputeTriangleNormal(v0, v1, v2) {
+  let v0v1 = v1.sub(v0);
+  let v0v2 = v2.sub(v0);
+  return v0v1.cross(v0v2);
+}
+
+function ComputeIllumination(vertex, normal, camera, lights) {
+  let illumination = 0;
+  for (let l = 0; l < lights.length; l++) {
+    let light = lights[l];
+    if (light.type == LT_AMBIENT) {
+      illumination += light.intensity;
+      continue;
+    }
+
+    let vl;
+    if (light.type == LT_DIRECTIONAL) {
+      let cameraMatrix = Transposed(camera.orientation);
+      let rotated_light = MultiplyMV(cameraMatrix, new Vertex4(light.vector));
+      vl = rotated_light;
+    } else if (light.type == LT_POINT) {
+      let cameraMatrix = MultiplyMM4(
+        Transposed(camera.orientation),
+        MakeTranslationMatrix(camera.position.mul(-1)),
+      );
+      let transformed_light = MultiplyMV(
+        cameraMatrix,
+        new Vertex4(light.vector),
+      );
+      vl = vertex.mul(-1).add(transformed_light);
+    }
+
+    // Diffuse component.
+    if (LightingModel & LM_DIFFUSE) {
+      let cos_alpha = vl.dot(normal) / (vl.length() * normal.length());
+      if (cos_alpha > 0) {
+        illumination += cos_alpha * light.intensity;
+      }
+    }
+
+    // Specular component.
+    if (LightingModel & LM_SPECULAR) {
+      let reflected = normal.mul(2 * normal.dot(vl)).sub(vl);
+      let view = camera.position.sub(vertex);
+
+      let cos_beta = reflected.dot(view) / (reflected.length() * view.length());
+      if (cos_beta > 0) {
+        let specular = 50;
+        illumination += Math.pow(cos_beta, specular) * light.intensity;
+      }
+    }
+  }
+  return illumination;
+}
+
+const LM_DIFFUSE = 1;
+const LM_SPECULAR = 2;
+
+const SM_FLAT = 0;
+const SM_GOURAUD = 1;
+const SM_PHONG = 2;
+
+let LightingModel = LM_DIFFUSE | LM_SPECULAR;
+let ShadingModel = SM_PHONG;
+let UseVertexNormals = true;
+
+function EdgeInterpolate(y0, v0, y1, v1, y2, v2) {
+  let v01 = Interpolate(y0, v0, y1, v1);
+  let v12 = Interpolate(y1, v1, y2, v2);
+  let v02 = Interpolate(y0, v0, y2, v2);
+  v01.pop();
+  let v012 = v01.concat(v12);
+  return [v02, v012];
+}
+
+function RenderTriangle(
+  triangle,
+  vertices,
+  projected,
+  camera,
+  lights,
+  orientation,
+) {
+  // Sort by projected point Y.
+  let indexes = SortedVertexIndexes(triangle.indexes, projected);
+  let [i0, i1, i2] = indexes;
+
+  let v0 = vertices[triangle.indexes[i0]];
+  let v1 = vertices[triangle.indexes[i1]];
+  let v2 = vertices[triangle.indexes[i2]];
+
+  // Compute triangle normal. Use the unsorted vertices, otherwise the winding of the points may change.
+  let normal = ComputeTriangleNormal(
+    vertices[triangle.indexes[0]],
+    vertices[triangle.indexes[1]],
+    vertices[triangle.indexes[2]],
+  );
+
+  // Backface culling.
+  let vertex_to_camera = vertices[triangle.indexes[0]].mul(-1); // Should be Subtract(camera.position, vertices[triangle.indexes[0]])
+  if (vertex_to_camera.dot(normal) <= 0) {
+    return;
+  }
+
+  // Get attribute values (X, 1/Z) at the vertices.
+  let p0 = projected[triangle.indexes[i0]];
+  let p1 = projected[triangle.indexes[i1]];
+  let p2 = projected[triangle.indexes[i2]];
+
+  // Compute attribute values at the edges.
+  let [x02, x012] = EdgeInterpolate(p0.y, p0.x, p1.y, p1.x, p2.y, p2.x);
+  let [iz02, iz012] = EdgeInterpolate(
+    p0.y,
+    1.0 / v0.z,
+    p1.y,
+    1.0 / v1.z,
+    p2.y,
+    1.0 / v2.z,
+  );
+
+  if (UseVertexNormals) {
+    let transform = MultiplyMM4(Transposed(camera.orientation), orientation);
+    var normal0 = MultiplyMV(transform, new Vertex4(triangle.normals[i0]));
+    var normal1 = MultiplyMV(transform, new Vertex4(triangle.normals[i1]));
+    var normal2 = MultiplyMV(transform, new Vertex4(triangle.normals[i2]));
+  } else {
+    var normal0 = normal;
+    var normal1 = normal;
+    var normal2 = normal;
+  }
+
+  let intensity;
+  if (ShadingModel == SM_FLAT) {
+    // Flat shading: compute lighting for the entire triangle.
+    let center = Vertex(
+      (v0.x + v1.x + v2.x) / 3.0,
+      (v0.y + v1.y + v2.y) / 3.0,
+      (v0.z + v1.z + v2.z) / 3.0,
+    );
+    intensity = ComputeIllumination(center, normal0, camera, lights);
+  } else if (ShadingModel == SM_GOURAUD) {
+    // Gouraud shading: compute lighting at the vertices, and interpolate.
+    let i0 = ComputeIllumination(v0, normal0, camera, lights);
+    let i1 = ComputeIllumination(v1, normal1, camera, lights);
+    let i2 = ComputeIllumination(v2, normal2, camera, lights);
+    var [i02, i012] = EdgeInterpolate(p0.y, i0, p1.y, i1, p2.y, i2);
+  } else if (ShadingModel == SM_PHONG) {
+    // Phong shading: interpolate normal vectors.
+    var [nx02, nx012] = EdgeInterpolate(
+      p0.y,
+      normal0.x,
+      p1.y,
+      normal1.x,
+      p2.y,
+      normal2.x,
+    );
+    var [ny02, ny012] = EdgeInterpolate(
+      p0.y,
+      normal0.y,
+      p1.y,
+      normal1.y,
+      p2.y,
+      normal2.y,
+    );
+    var [nz02, nz012] = EdgeInterpolate(
+      p0.y,
+      normal0.z,
+      p1.y,
+      normal1.z,
+      p2.y,
+      normal2.z,
+    );
+  }
+
+  // Determine which is left and which is right.
+  let m = (x02.length / 2) | 0;
+  if (x02[m] < x012[m]) {
+    var [x_left, x_right] = [x02, x012];
+    var [iz_left, iz_right] = [iz02, iz012];
+    var [i_left, i_right] = [i02, i012];
+
+    var [nx_left, nx_right] = [nx02, nx012];
+    var [ny_left, ny_right] = [ny02, ny012];
+    var [nz_left, nz_right] = [nz02, nz012];
+  } else {
+    var [x_left, x_right] = [x012, x02];
+    var [iz_left, iz_right] = [iz012, iz02];
+    var [i_left, i_right] = [i012, i02];
+
+    var [nx_left, nx_right] = [nx012, nx02];
+    var [ny_left, ny_right] = [ny012, ny02];
+    var [nz_left, nz_right] = [nz012, nz02];
+  }
+
+  // Draw horizontal segments.
+  for (let y = p0.y; y <= p2.y; y++) {
+    let [xl, xr] = [x_left[y - p0.y] | 0, x_right[y - p0.y] | 0];
+
+    // Interpolate attributes for this scanline.
+    let [zl, zr] = [iz_left[y - p0.y], iz_right[y - p0.y]];
+    let zscan = Interpolate(xl, zl, xr, zr);
+
+    let iscan, nxscan, nyscan, nzscan;
+    if (ShadingModel == SM_GOURAUD) {
+      let [il, ir] = [i_left[y - p0.y], i_right[y - p0.y]];
+      iscan = Interpolate(xl, il, xr, ir);
+    } else if (ShadingModel == SM_PHONG) {
+      let [nxl, nxr] = [nx_left[y - p0.y], nx_right[y - p0.y]];
+      let [nyl, nyr] = [ny_left[y - p0.y], ny_right[y - p0.y]];
+      let [nzl, nzr] = [nz_left[y - p0.y], nz_right[y - p0.y]];
+
+      nxscan = Interpolate(xl, nxl, xr, nxr);
+      nyscan = Interpolate(xl, nyl, xr, nyr);
+      nzscan = Interpolate(xl, nzl, xr, nzr);
+    }
+
+    for (let x = xl; x <= xr; x++) {
+      let inv_z = zscan[x - xl];
+      if (UpdateDepthBufferIfCloser(x, y, inv_z)) {
+        if (ShadingModel == SM_FLAT) {
+          // Just use the per-triangle intensity.
+        } else if (ShadingModel == SM_GOURAUD) {
+          intensity = iscan[x - xl];
+        } else if (ShadingModel == SM_PHONG) {
+          let vertex = UnProjectVertex(x, y, inv_z);
+          let normal = Vertex(nxscan[x - xl], nyscan[x - xl], nzscan[x - xl]);
+          intensity = ComputeIllumination(vertex, normal, camera, lights);
+        }
+
+        PutPixel(x, y, triangle.color.mul(intensity));
+      }
+    }
+  }
+}
+
+// Clips a triangle against a plane. Adds output to triangles and vertices.
+function ClipTriangle(triangle, plane, triangles, vertices) {
+  let v0 = vertices[triangle.indexes[0]];
+  let v1 = vertices[triangle.indexes[1]];
+  let v2 = vertices[triangle.indexes[2]];
+
+  let in0 = plane.normal.dot(v0) + plane.distance > 0;
+  let in1 = plane.normal.dot(v1) + plane.distance > 0;
+  let in2 = plane.normal.dot(v2) + plane.distance > 0;
+
+  let in_count = in0 + in1 + in2;
+  if (in_count == 0) {
+    // Nothing to do - the triangle is fully clipped out.
+  } else if (in_count == 3) {
+    // The triangle is fully in front of the plane.
+    triangles.push(triangle);
+  } else if (in_count == 1) {
+    // The triangle has one vertex in. Output is one clipped triangle.
+  } else if (in_count == 2) {
+    // The triangle has two vertices in. Output is two clipped triangles.
+  }
+}
+
+function TransformAndClip(clipping_planes, model, scale, transform) {
+  // Transform the bounding sphere, and attempt early discard.
+  let center = MultiplyMV(transform, new Vertex4(model.bounds_center));
+  let radius = model.bounds_radius * scale;
+  for (let p = 0; p < clipping_planes.length; p++) {
+    let distance =
+      clipping_planes[p].normal.dot(center) + clipping_planes[p].distance;
+    if (distance < -radius) {
+      return null;
+    }
+  }
+
+  // Apply modelview transform.
+  let vertices = [];
+  for (let i = 0; i < model.vertices.length; i++) {
+    vertices.push(MultiplyMV(transform, new Vertex4(model.vertices[i])));
+  }
+
+  // Clip the entire model against each successive plane.
+  let triangles = model.triangles.slice();
+  for (let p = 0; p < clipping_planes.length; p++) {
+    let new_triangles = [];
+    for (let i = 0; i < triangles.length; i++) {
+      ClipTriangle(triangles[i], clipping_planes[p], new_triangles, vertices);
+    }
+    triangles = new_triangles;
+  }
+
+  return Model(vertices, triangles, center, model.bounds_radius);
+}
+
+function RenderModel(model, camera, lights, orientation) {
+  let projected = [];
+  for (let i = 0; i < model.vertices.length; i++) {
+    projected.push(ProjectVertex(new Vertex4(model.vertices[i])));
+  }
+  for (let i = 0; i < model.triangles.length; i++) {
+    RenderTriangle(
+      model.triangles[i],
+      model.vertices,
+      projected,
+      camera,
+      lights,
+      orientation,
+    );
+  }
+}
+
+function RenderScene(camera, instances, lights) {
+  let cameraMatrix = MultiplyMM4(
+    Transposed(camera.orientation),
+    MakeTranslationMatrix(camera.position.mul(-1)),
+  );
+
+  for (let i = 0; i < instances.length; i++) {
+    let transform = MultiplyMM4(cameraMatrix, instances[i].transform);
+    let clipped = TransformAndClip(
+      camera.clipping_planes,
+      instances[i].model,
+      instances[i].scale,
+      transform,
+    );
+    if (clipped != null) {
+      RenderModel(clipped, camera, lights, instances[i].orientation);
+    }
+  }
+}
+
+// ----- Sphere model generator -----
+function GenerateSphere(divs, color) {
+  let vertices = [];
+  let triangles = [];
+
+  let delta_angle = (2.0 * Math.PI) / divs;
+
+  // Generate vertices and normals.
+  for (let d = 0; d < divs + 1; d++) {
+    let y = (2.0 / divs) * (d - divs / 2);
+    let radius = Math.sqrt(1.0 - y * y);
+    for (let i = 0; i < divs; i++) {
+      let vertex = new Vertex(
+        radius * Math.cos(i * delta_angle),
+        y,
+        radius * Math.sin(i * delta_angle),
+      );
+      vertices.push(vertex);
+    }
+  }
+
+  // Generate triangles.
+  for (let d = 0; d < divs; d++) {
+    for (let i = 0; i < divs; i++) {
+      let i0 = d * divs + i;
+      let i1 = (d + 1) * divs + ((i + 1) % divs);
+      let i2 = divs * d + ((i + 1) % divs);
+      let tri0 = [i0, i1, i2];
+      let tri1 = [i0, i0 + divs, i1];
+      triangles.push(
+        Triangle(tri0, color, [
+          vertices[tri0[0]],
+          vertices[tri0[1]],
+          vertices[tri0[2]],
+        ]),
+      );
+      triangles.push(
+        Triangle(tri1, color, [
+          vertices[tri1[0]],
+          vertices[tri1[1]],
+          vertices[tri1[2]],
+        ]),
+      );
+    }
+  }
+
+  return new Model(vertices, triangles, new Vertex(0, 0, 0), 1.0);
+}
+
+// ----- Cube model -----
+const vertices = [
+  new Vertex(1, 1, 1),
+  new Vertex(-1, 1, 1),
+  new Vertex(-1, -1, 1),
+  new Vertex(1, -1, 1),
+  new Vertex(1, 1, -1),
+  new Vertex(-1, 1, -1),
+  new Vertex(-1, -1, -1),
+  new Vertex(1, -1, -1),
+];
+
+const RED = new Color(255, 0, 0);
+const GREEN = new Color(0, 255, 0);
+const BLUE = new Color(0, 0, 255);
+const YELLOW = new Color(255, 255, 0);
+const PURPLE = new Color(255, 0, 255);
+const CYAN = new Color(0, 255, 255);
+
+const triangles = [
+  new Triangle([0, 1, 2], RED, [
+    new Vertex(0, 0, 1),
+    new Vertex(0, 0, 1),
+    new Vertex(0, 0, 1),
+  ]),
+  new Triangle([0, 2, 3], RED, [
+    new Vertex(0, 0, 1),
+    new Vertex(0, 0, 1),
+    new Vertex(0, 0, 1),
+  ]),
+  new Triangle([4, 0, 3], GREEN, [
+    new Vertex(1, 0, 0),
+    new Vertex(1, 0, 0),
+    new Vertex(1, 0, 0),
+  ]),
+  new Triangle([4, 3, 7], GREEN, [
+    new Vertex(1, 0, 0),
+    new Vertex(1, 0, 0),
+    new Vertex(1, 0, 0),
+  ]),
+  new Triangle([5, 4, 7], BLUE, [
+    new Vertex(0, 0, -1),
+    new Vertex(0, 0, -1),
+    new Vertex(0, 0, -1),
+  ]),
+  new Triangle([5, 7, 6], BLUE, [
+    new Vertex(0, 0, -1),
+    new Vertex(0, 0, -1),
+    new Vertex(0, 0, -1),
+  ]),
+  new Triangle([1, 5, 6], YELLOW, [
+    new Vertex(-1, 0, 0),
+    new Vertex(-1, 0, 0),
+    new Vertex(-1, 0, 0),
+  ]),
+  new Triangle([1, 6, 2], YELLOW, [
+    new Vertex(-1, 0, 0),
+    new Vertex(-1, 0, 0),
+    new Vertex(-1, 0, 0),
+  ]),
+  new Triangle([1, 0, 5], PURPLE, [
+    new Vertex(0, 1, 0),
+    new Vertex(0, 1, 0),
+    new Vertex(0, 1, 0),
+  ]),
+  new Triangle([5, 0, 4], PURPLE, [
+    new Vertex(0, 1, 0),
+    new Vertex(0, 1, 0),
+    new Vertex(0, 1, 0),
+  ]),
+  new Triangle([2, 6, 7], CYAN, [
+    new Vertex(0, -1, 0),
+    new Vertex(0, -1, 0),
+    new Vertex(0, -1, 0),
+  ]),
+  new Triangle([2, 7, 3], CYAN, [
+    new Vertex(0, -1, 0),
+    new Vertex(0, -1, 0),
+    new Vertex(0, -1, 0),
+  ]),
+];
+
+let cube = new Model(vertices, triangles, new Vertex(0, 0, 0), Math.sqrt(3));
+
+const sphere = GenerateSphere(15, GREEN);
+
+let instances = [
+  new Instance(cube, new Vertex(-1.5, 0, 7), Identity4x4, 0.75),
+  new Instance(cube, new Vertex(1.25, 2.5, 7.5), MakeOYRotationMatrix(195)),
+  new Instance(sphere, new Vertex(1.75, -0.5, 7), Identity4x4, 1.5),
+];
+
+const camera = new Camera(new Vertex(-3, 1, 2), MakeOYRotationMatrix(-30));
+
+let s2 = 1.0 / Math.sqrt(2);
+camera.clipping_planes = [
+  new Plane(new Vertex(0, 0, 1), -1), // Near
+  new Plane(new Vertex(s2, 0, s2), 0), // Left
+  new Plane(new Vertex(-s2, 0, s2), 0), // Right
+  new Plane(new Vertex(0, -s2, s2), 0), // Top
+  new Plane(new Vertex(0, s2, s2), 0), // Bottom
+];
+
+const lights = [
+  new Light(LT_AMBIENT, 0.2),
+  new Light(LT_DIRECTIONAL, 0.2, Vertex(-1, 0, 1)),
+  new Light(LT_POINT, 0.6, Vertex(-3, 2, -10)),
+];
+
+// ----- For the "wrong Gouraud interpolation" image -----
+/*
+let camera = Camera(Vertex(0, 0, 0), Identity4x4);
+
+let light_position = Vertex(2.25, 0, 5);
+//let light_position = Vertex(1, 0, 5);
+//let light_position = Vertex(0, 0, 5);
+
+lights = [
+  new Light(LT_AMBIENT, 0.2),
+  new Light(LT_POINT, 0.6, light_position)
+];
+
+
+let triangles = [
+  new Triangle([4, 0, 3], GREEN,  [Vertex(1, 0, 0), Vertex(1, 0, 0), Vertex(1, 0, 0)]),
+  new Triangle([4, 3, 7], GREEN,  [Vertex(1, 0, 0), Vertex(1, 0, 0), Vertex(1, 0, 0)]),
+];
+
+let light_source = GenerateSphere(15, YELLOW);
+
+let face = Model(vertices, triangles, Vertex(0, 0, 0), Math.sqrt(3));
+
+let instances = [
+  Instance(light_source, light_position, Identity4x4, 0.1),
+  Instance(face, Vertex(-2, 0, 5), MakeOYRotationMatrix(-30), 1),
+];
+*/
+// -----------------------------------------------------
+
+function SetLightingModel(model) {
+  LightingModel = model;
+  Render();
+}
+
+function SetShadingModel(model) {
+  ShadingModel = model;
+  Render();
+}
+
+function SetUseVertexNormals(use_vertex_normals) {
+  UseVertexNormals = use_vertex_normals;
+  Render();
+}
+
+function Render() {
+  ClearAll();
+  // This lets the browser clear the canvas before blocking to render the scene.
+  setTimeout(function () {
+    RenderScene(camera, instances, lights);
+    UpdateCanvas();
+  }, 0);
+}
+
+Render();
