@@ -5,5 +5,7 @@
 rengine
 *.o
 
+*.js
+
 # OS files
 .DS_Store
