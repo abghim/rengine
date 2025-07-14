@@ -475,7 +475,7 @@ int main()
     mesh utah_mesh("utah_teapot.obj");
 
     Scene scene(&utah_mesh, a, b, M_PI/2, 0.1, 1500, 1600, 900);
-    (scene.object.model)->print();
+    // (scene.object.model)->print();
 
 	return 0;
 }
