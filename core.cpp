@@ -417,7 +417,7 @@ struct screen {
 
     bool putzbuf(int x, int y, double invz)
     {
-        if (invz<0) return 1;
+        if (invz<0 || invz<this->data[x+height*y].invz) return 1;
         data[x+height*y].setdepth(invz);
         return 0;
     }
