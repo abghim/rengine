@@ -1,12 +1,14 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <math.h>
 #include <stdio.h>
 #include <iostream>
 #include <strstream>
 #include <vector>
+#include <stdlib.h>
 
 using std::ifstream;
 using std::strstream;
@@ -68,7 +70,14 @@ struct mat4x4 {
 
 struct rgb {
 	unsigned char r, g, b;
-	rgb(unsigned char r, unsigned char g, unsigned char b) {
+
+	rgb()
+	{
+	    r = 0; g = 0; b = 0;
+	}
+
+	rgb(unsigned char r, unsigned char g, unsigned char b)
+	{
 	    this->r = r; this->g = g; this->b = b;
 	}
 };
@@ -103,7 +112,6 @@ struct mesh {
 
 			strstream s;
 			s << line;
-
 			char junk;
 
 			if (line[0] == 'v')
@@ -365,6 +373,62 @@ class Shader {
 
  */
 
+struct pixel {
+    rgb color;
+    double invz;
+
+    pixel() : color(), invz(0.0) {}
+
+    void putcolor(unsigned char r, unsigned char g, unsigned char b)
+    {
+        color = rgb(r, g, b);
+        return;
+    }
+
+    void setdepth(double invz)
+    {
+        this->invz = invz;
+        return;
+    }
+};
+
+struct screen {
+    int width;
+    int height;
+
+    pixel *data;
+
+    screen(int w, int h) : width(w), height(h)
+    {
+        data = (pixel *) malloc(sizeof(pixel)*w*h);
+        if (data == NULL) fprintf(stderr, "Screen allocation failed.\n");
+    }
+
+    ~screen() {
+        free(data);
+    }
+
+    bool putcolor(int x, int y, unsigned char r, unsigned char g, unsigned char b)
+    {
+        if (r>255 || r<0 || g>255 || g<0 || b>255 || b<0) return 1;
+        data[x+height*y].putcolor(r, g, b);
+        return 0;
+    }
+
+    bool putzbuf(int x, int y, double invz)
+    {
+        if (invz<0) return 1;
+        data[x+height*y].setdepth(invz);
+        return 0;
+    }
+
+    pixel get(int x, int y)
+    {
+        return data[x+height*y];
+    }
+
+};
+
 
 
 class Scene {
@@ -375,12 +439,22 @@ class Scene {
 		Shader shader;
 
 		/* simple obj viewer (no complex scene, no actor transforms) */
-		Scene(mesh *meshobj, /* cameara */ double x, double y, double z, double yaw, double pitch, double roll,  double fov, double znear, double zfar, double width, double height /* no shader settings */): camera(x, y, z, yaw, pitch, roll, fov, znear, zfar, width, height), object(meshobj), shader(){
+		Scene(mesh *meshobj, /* cameara */ double x, double y, double z, double yaw, double pitch, double roll,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */) : camera(x, y, z, yaw, pitch, roll, fov, znear, zfar, width, height), object(meshobj), shader(){
             printf("Scene object initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
 		}
 
-		Scene(mesh *meshobj, /* cameara */ vec3d pos, vec3d rot,  double fov, double znear, double zfar, double width, double height /* no shader settings */): camera(pos, rot, fov, znear, zfar, width, height), object(meshobj), shader(){
-		    printf("Scene object initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
+		Scene(mesh *meshobj, /* cameara */ vec3d pos, vec3d rot,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */) : camera(pos, rot, fov, znear, zfar, width, height), object(meshobj), shader(){
+		    printf("Scene initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
+		}
+
+		bool query()
+		{
+		    return 0;
+		}
+
+		void frame()
+		{
+
 		}
 };
 
@@ -397,15 +471,11 @@ int main()
 {
     /* tests -> vectors */
     vec3d a(1, 2, 3), b(0, 0, 0);
-    (a-b).print();
-    printf("%f", dot(a, b));
-    a.normalize().print();
 
     mesh utah_mesh("utah_teapot.obj");
 
-    utah_mesh.print();
-
-    Scene(&utah_mesh, a, b, M_PI/2, 0.1, 1500, 1600, 900);
+    Scene scene(&utah_mesh, a, b, M_PI/2, 0.1, 1500, 1600, 900);
+    (scene.object.model)->print();
 
 	return 0;
 }

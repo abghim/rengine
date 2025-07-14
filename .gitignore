@@ -4,6 +4,7 @@
 # source
 rengine
 *.o
+*.out
 
 *.js
 
