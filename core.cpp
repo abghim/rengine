@@ -10,6 +10,8 @@
 #include <vector>
 #include <stdlib.h>
 
+#define DEV_SCALE_MESH 1
+
 using std::ifstream;
 using std::strstream;
 using std::vector;
@@ -46,6 +48,12 @@ struct vec3d {
         double mag = sqrt(x * x + y * y + z * z);
         return {x / mag, y / mag, z / mag};
     }
+
+    void print2d()
+    {
+        printf("%f, %f\n", x, y);
+    }
+
 };
 
 struct mat4x4 {
@@ -244,12 +252,19 @@ class Camera
 
 		vec3d getpos() { return pos; }
 		vec3d getrot() { return rot; }
+		double getwidth() { return width; }
+		double getheight() { return height; }
 		mat4x4 getproject() { return project; }
 		mat4x4 getview() { return view; }
 
 		vec3d apply(vec3d &in)
 		{
-		    return project*(view*in);
+		    // updateview(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z);
+
+			vec3d ndc = (project*(view*vec3d(in.x*DEV_SCALE_MESH, in.y*DEV_SCALE_MESH, in.z*DEV_SCALE_MESH)));
+			// vec3d ndc = (project*(view*in));
+			return vec3d((ndc.x+1)*width/2, (-ndc.y+1)*height/2, 0.0);
+			// return ndc;
 		}
 };
 
@@ -293,6 +308,8 @@ void Camera::setcam(double fov, double znear, double zfar, double width, double 
 	project.m[2][2] = -(zfar+znear)/(zfar-znear);
 	project.m[3][2] = -1.0;
 	project.m[2][3] = -2*zfar*znear/(zfar-znear);
+
+	this->width = width; this->height = height;
 
 	return;
 }
@@ -440,22 +457,41 @@ class Scene {
 
 		/* simple obj viewer (no complex scene, no actor transforms) */
 		Scene(mesh *meshobj, /* cameara */ double x, double y, double z, double yaw, double pitch, double roll,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */) : camera(x, y, z, yaw, pitch, roll, fov, znear, zfar, width, height), object(meshobj), shader(){
-            printf("Scene object initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
+            // printf("Scene object initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
 		}
 
 		Scene(mesh *meshobj, /* cameara */ vec3d pos, vec3d rot,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */) : camera(pos, rot, fov, znear, zfar, width, height), object(meshobj), shader(){
-		    printf("Scene initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
+		    // printf("Scene initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
 		}
 
+		/* query scene */
 		bool query()
 		{
 		    return 0;
 		}
 
-		void frame()
+		void frame(screen &viewport)
 		{
-
+            int i = 1;
+            for (triangle face : object.model->faces) {
+                printf("\nface #%d: \n", i++);
+                printf("\t"); camera.apply((object.model->vertexes)[face.i1]).print2d();
+                printf("\t"); camera.apply((object.model->vertexes)[face.i2]).print2d();
+                printf("\t"); camera.apply((object.model->vertexes)[face.i3]).print2d();
+            } return;
 		}
+
+		void _showscene /* dev option: don't have SDL visualizer yet, output to file instead */ ()
+		{
+		    std::cout << camera.getwidth() << '\n';
+			std::cout << camera.getheight() << '\n';
+            for (triangle face : object.model->faces) {
+                camera.apply((object.model->vertexes)[face.i1]).print2d();
+                camera.apply((object.model->vertexes)[face.i2]).print2d();
+                camera.apply((object.model->vertexes)[face.i3]).print2d();
+            } return;
+		}
+
 };
 
 
@@ -470,12 +506,14 @@ class Scene {
 int main()
 {
     /* tests -> vectors */
-    vec3d a(1, 2, 3), b(0, 0, 0);
-
     mesh utah_mesh("utah_teapot.obj");
 
-    Scene scene(&utah_mesh, a, b, M_PI/2, 0.1, 1500, 1600, 900);
+    Scene scene(&utah_mesh, 1, 2, 3, 0, 0.0, 0, M_PI/2, 0.1, 1500, 1600, 900);
+    screen viewport1(1600, 900);
+    // scene.frame(viewport1);
     // (scene.object.model)->print();
+
+    scene._showscene();
 
 	return 0;
 }
