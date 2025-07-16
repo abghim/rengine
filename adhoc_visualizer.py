@@ -1,4 +1,5 @@
-import pygame
+
+import pygame, random
 
 filename = "test.tri"
 
@@ -26,13 +27,28 @@ pygame.init();
 
 screen = pygame.display.set_mode((width, height))
 
+colors = ['red', 'blue', 'green', 'cyan', 'magenta', 'yellow', 'white']
+
+mapcolor = []
+
+for i, triangle in enumerate(drawlist):
+    mapcolor.append(colors[i%7])
+
+i = 0
 run = 1
 while run:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             run = 0
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_SPACE:
+                random.shuffle(drawlist)
     screen.fill('black')
+
+    i = 0
     for triangle in drawlist:
-        pygame.draw.polygon(screen, 'white', triangle)
+        pygame.draw.polygon(screen, mapcolor[i], triangle)
+        i += 1
+
     pygame.display.flip()
