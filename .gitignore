@@ -1,6 +1,6 @@
 # vim swap file
 *.swp
-
+.cache/
 # source
 rengine
 *.o
