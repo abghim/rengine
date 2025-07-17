@@ -12,6 +12,9 @@ int main()
     Scene scene(&utah_mesh, 2, 4, 6, rad(17), rad(-10), rad(5), rad(80), 0.1, 1500, 800, 600);
     screen viewport1(800, 600);
 
+    vec3d camera_pos = scene.camera.getpos();
+    vec3d camear_dir = scene.camera.getrot();
+
     // scene.frame(viewport1);
     // (scene.object.model)->print();
     //
@@ -31,10 +34,33 @@ int main()
 
     bool running = 1;
     while (running) {
+
+        vec3d camera_pos = scene.camera.getpos();
+        vec3d camera_dir = scene.camera.getrot();
+
+
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT)
-                running = false;         /* toggle colour */
+                running = false;
+            else if (e.type == SDL_KEYDOWN) {
+                switch (e.key.keysym.scancode) {
+                    case SDL_SCANCODE_S: scene.camera.updatepos(camera_pos.x, camera_pos.y, camera_pos.z+0.1); break;
+                    case SDL_SCANCODE_W: scene.camera.updatepos(camera_pos.x, camera_pos.y, camera_pos.z-0.1); break;
+                    case SDL_SCANCODE_Q: scene.camera.updatepos(camera_pos.x, camera_pos.y+0.1, camera_pos.z); break;
+                    case SDL_SCANCODE_E: scene.camera.updatepos(camera_pos.x, camera_pos.y-0.1, camera_pos.z); break;
+                    case SDL_SCANCODE_A: scene.camera.updatepos(camera_pos.x+0.1, camera_pos.y, camera_pos.z); break;
+                    case SDL_SCANCODE_D: scene.camera.updatepos(camera_pos.x-0.1, camera_pos.y, camera_pos.z); break;
+
+                    case SDL_SCANCODE_Z: scene.camera.updaterot(camera_dir.x, camera_dir.y, camera_dir.z+rad(1)); break;
+                    case SDL_SCANCODE_X: scene.camera.updaterot(camera_dir.x, camera_dir.y, camera_dir.z-rad(1)); break;
+                    case SDL_SCANCODE_UP: scene.camera.updaterot(camera_dir.x, camera_dir.y-rad(1), camera_dir.z); break;
+                    case SDL_SCANCODE_DOWN: scene.camera.updaterot(camera_dir.x, camera_dir.y+rad(1), camera_dir.z); break;
+                    case SDL_SCANCODE_RIGHT: scene.camera.updaterot(camera_dir.x+rad(1), camera_dir.y, camera_dir.z); break;
+                    case SDL_SCANCODE_LEFT: scene.camera.updaterot(camera_dir.x-rad(1), camera_dir.y, camera_dir.z); break;
+                }
+            }
+
         }
 
         SDL_SetRenderDrawColor(ren, 0, 0, 0, 25);
