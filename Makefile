@@ -7,3 +7,8 @@ main.o: main.cpp core.hpp core.cpp
 
 rengine: main.o core.o
 	clang++ $$(sdl2-config --cflags --libs) main.o core.o -o rengine
+
+clean:
+	rm *.o
+	rm rengine
+
