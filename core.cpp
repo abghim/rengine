@@ -133,19 +133,3 @@ vec3d reflectedDirection(const vec3d &L, const vec3d &N)
  +----------------------+
 
  */
-
-int main()
-{
-    /* tests -> vectors */
-    mesh utah_mesh("utah_teapot.obj");
-
-    Scene scene(&utah_mesh, 1, 2, 3, 0, 0.0, 0, M_PI/2, 0.1, 1500, 1600, 900);
-    screen viewport1(1600, 900);
-
-    // scene.frame(viewport1);
-    // (scene.object.model)->print();
-
-    scene._showscene();
-
-	return 0;
-}

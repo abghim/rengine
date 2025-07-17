@@ -93,6 +93,13 @@ struct rgb {
 struct triangle3d {
 	vec3d p[3];
 	rgb color;
+
+	triangle3d(vec3d p1, vec3d p2, vec3d p3) : color(255, 255, 255)
+	{
+        p[0] = p1;
+        p[1] = p2;
+        p[2] = p3;
+	}
 };
 
 struct triangle {
@@ -233,6 +240,9 @@ class Camera
 			updateview(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z);
 		}
 
+		
+		
+		
 		vec3d getpos() { return pos; }
 		vec3d getrot() { return rot; }
 		double getwidth() { return width; }
@@ -401,6 +411,19 @@ class Scene {
                 camera.apply((object.model->vertexes)[face.i2]).print2d();
                 camera.apply((object.model->vertexes)[face.i3]).print2d();
             } return;
+		}
+
+		vector<triangle3d> tris()
+		{
+		    /* prints all triangles */
+			vector<triangle3d> ret;
+			for (triangle face : object.model->faces) {
+			    vec3d vs[3];
+                vs[0] = camera.apply((object.model->vertexes)[face.i1]);
+                vs[1]= camera.apply((object.model->vertexes)[face.i2]);
+                vs[2] = camera.apply((object.model->vertexes)[face.i3]);
+                ret.push_back(triangle3d(vs[0], vs[1], vs[2]));
+            } return ret;
 		}
 
 };
