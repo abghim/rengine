@@ -1,0 +1,13 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/clang++",
+      "-I/opt/homebrew/include/SDL2",
+      "-D_THREAD_SAFE",
+      "-c",
+      "main.cpp"
+    ],
+    "directory": "/Users/aiden/Desktop/hacking/rengine",
+    "file": "/Users/aiden/Desktop/hacking/rengine/main.cpp"
+  }
+]
