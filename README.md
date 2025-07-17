@@ -1,6 +1,6 @@
 # rengine
 
-3D rendering engine written in C, using SDL2 for primitive graphics.
+3D rendering engine written in C++, using SDL2 for primitive graphics.
 
 ## To-do
 - add advanced shading -- current model is rudimentary prototype
@@ -9,5 +9,4 @@
 	- add Lightsrc class
 - add model transform of actors
 - add functioning color system
-- import from obj stl... functionality
 - allow for multiple actors in a scene
