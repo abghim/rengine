@@ -2,12 +2,14 @@
 #include <cstdio>
 #include "core.hpp"
 
+#define rad(x) ((x)*M_PI/180)
+
 int main()
 {
     /* tests -> vectors */
     mesh utah_mesh("utah_teapot.obj");
 
-    Scene scene(&utah_mesh, 1, 2, 3, 0, 0.0, 0, M_PI/2, 0.1, 1500, 800, 600);
+    Scene scene(&utah_mesh, 2, 4, 6, rad(17), rad(-10), rad(5), rad(80), 0.1, 1500, 800, 600);
     screen viewport1(800, 600);
 
     // scene.frame(viewport1);
@@ -37,6 +39,7 @@ int main()
 
         SDL_SetRenderDrawColor(ren, 0, 0, 0, 25);
         SDL_RenderClear(ren);
+
 
 
         for (triangle3d tri : scene.tris()) {

@@ -240,9 +240,8 @@ class Camera
 			updateview(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z);
 		}
 
-		
-		
-		
+
+
 		vec3d getpos() { return pos; }
 		vec3d getrot() { return rot; }
 		double getwidth() { return width; }
