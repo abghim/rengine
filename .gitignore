@@ -3,6 +3,7 @@
 .cache/
 # source
 rengine
+rengine_legacy
 *.o
 *.out
 
