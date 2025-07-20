@@ -58,6 +58,8 @@ int main()
                     case SDL_SCANCODE_DOWN: scene.camera.updaterot(camera_dir.x, camera_dir.y+rad(1), camera_dir.z); break;
                     case SDL_SCANCODE_RIGHT: scene.camera.updaterot(camera_dir.x+rad(1), camera_dir.y, camera_dir.z); break;
                     case SDL_SCANCODE_LEFT: scene.camera.updaterot(camera_dir.x-rad(1), camera_dir.y, camera_dir.z); break;
+
+                    default: break;
                 }
             }
 
