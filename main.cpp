@@ -7,7 +7,10 @@
 int main()
 {
     /* tests -> vectors */
-    mesh utah_mesh("utah_teapot.obj");
+    mesh utah_mesh("moai.obj");
+
+    utah_mesh.print();
+    mesh("utah_teapot.obj").print();
 
     Scene scene(&utah_mesh, 2, 4, 6, rad(17), rad(-10), rad(5), rad(80), 0.1, 1500, 800, 600);
     screen viewport1(800, 600);
