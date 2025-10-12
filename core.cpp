@@ -110,7 +110,10 @@ double dot(const vec3d &a, const vec3d &b)
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-
+vec3d operator*(const vec3d &a, const double b)
+{
+	return {a.x*b, a.y*b, a.z*b};
+}
 
 vec3d calculateUnitNormal(const vec3d &p1, const vec3d &p2, const vec3d &p3)
 {
