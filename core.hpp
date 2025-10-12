@@ -56,6 +56,16 @@ struct vec3d {
 
 };
 
+
+vec3d operator+(const vec3d &a, const vec3d &b);
+vec3d operator-(const vec3d &a, const vec3d &b);
+vec3d operator*(const vec3d &a, const double b);
+vec3d cross(const vec3d &a, const vec3d &b);
+double dot(const vec3d &a, const vec3d &b);
+vec3d calculateUnitNormal(const vec3d &p1, const vec3d &p2, const vec3d &p3);
+vec3d reflectedDirection(const vec3d &L, const vec3d &N);
+
+
 struct mat4x4 {
 	double m[4][4];
 
@@ -129,7 +139,7 @@ struct mesh {
 			s << line;
 			char junk;
 
-			if (line[0] == 'v')
+			if (line[0] == 'v' && line[1] != 'n' && line[1] != 't')
 			{
 				vec3d v;
 				s >> junk >> v.x >> v.y >> v.z;
@@ -267,18 +277,6 @@ class Camera
  +----------------------+
 
  */
-
-vec3d operator+(const vec3d &a, const vec3d &b);
-
-vec3d operator-(const vec3d &a, const vec3d &b);
-
-vec3d cross(const vec3d &a, const vec3d &b);
-
-double dot(const vec3d &a, const vec3d &b);
-
-vec3d calculateUnitNormal(const vec3d &p1, const vec3d &p2, const vec3d &p3);
-
-vec3d reflectedDirection(const vec3d &L, const vec3d &N);
 
 class Shader {
 
