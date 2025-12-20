@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <math.h>
 #include <stdio.h>
@@ -31,6 +32,7 @@ void vecprint(vec3d v)
 {
 	printf("(%4f, %4f, %4f)\n", v.x, v.y, v.z);
 	return;
+
 }
 
 

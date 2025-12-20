@@ -7,7 +7,7 @@
 int main()
 {
     /* tests -> vectors */
-    mesh utah_mesh("moai.obj");
+    mesh utah_mesh("utah_teapot.obj");
 
     utah_mesh.print();
     mesh("utah_teapot.obj").print();
