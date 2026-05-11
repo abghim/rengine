@@ -77,6 +77,8 @@ void Camera::setcam(double fov, double znear, double zfar, double width, double 
 	project.m[3][2] = -1.0;
 	project.m[2][3] = -2*zfar*znear/(zfar-znear);
 
+	this->znear = znear;
+	this->zfar = zfar;
 	this->width = width; this->height = height;
 
 	return;
@@ -138,5 +140,4 @@ vec3d reflectedDirection(const vec3d &L, const vec3d &N)
  +----------------------+
 
  */
-
 

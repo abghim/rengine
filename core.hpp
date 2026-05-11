@@ -206,6 +206,7 @@ class Camera
 
 		vec3d rot, pos;
 		double width, height;
+		double znear, zfar;
 
 		/* internal functions, invoked by Camera and updatepos/rot */
 		void updateview(double x, double y, double z, double yaw, double pitch, double roll);
@@ -258,6 +259,8 @@ class Camera
 		vec3d getrot() { return rot; }
 		double getwidth() { return width; }
 		double getheight() { return height; }
+		double getznear() { return znear; }
+		double getzfar() { return zfar; }
 		mat4x4 getproject() { return project; }
 		mat4x4 getview() { return view; }
 
@@ -425,11 +428,20 @@ class Scene {
 		{
 		    /* prints all triangles */
 			vector<triangle3d> ret;
+			mat4x4 view = camera.getview();
+			double znear = camera.getznear();
 			for (triangle face : object.model->faces) {
+				vec3d v1 = (object.model->vertexes)[face.i1] * DEV_SCALE_MESH;
+				vec3d v2 = (object.model->vertexes)[face.i2] * DEV_SCALE_MESH;
+				vec3d v3 = (object.model->vertexes)[face.i3] * DEV_SCALE_MESH;
+
+				// Coarse near-plane rejection to avoid projecting giant triangles.
+				if ((view * v1).z >= -znear || (view * v2).z >= -znear || (view * v3).z >= -znear) continue;
+
 			    vec3d vs[3];
-                vs[0] = camera.apply((object.model->vertexes)[face.i1]);
-                vs[1]= camera.apply((object.model->vertexes)[face.i2]);
-                vs[2] = camera.apply((object.model->vertexes)[face.i3]);
+	                vs[0] = camera.apply((object.model->vertexes)[face.i1]);
+	                vs[1]= camera.apply((object.model->vertexes)[face.i2]);
+	                vs[2] = camera.apply((object.model->vertexes)[face.i3]);
                 ret.push_back(triangle3d(vs[0], vs[1], vs[2]));
             } return ret;
 		}
@@ -450,13 +462,13 @@ class Scene {
 	private:
 		int getx(vec3d a, vec3d b, int y) {
 			if (a.y == b.y) {
-				return y;
+				return -1;
 			}
 			return (int) ((y-a.y)*(a.x-b.x)/(a.y-b.y)+a.x);
 		}
 
 		bool oob(vec3d p) {
-			return p.x >= display.width || p.y >= display.height;
+			return p.x<0 ||p.y<0 || p.x >= display.width || p.y >= display.height;
 		}
 
 		void puttri(triangle3d t) {
@@ -489,6 +501,9 @@ class Scene {
 			for (int y=bottom.y; y<mid.y; y++) {
 				int left = getx(top, bottom, y);
 				int right = getx(bottom, mid, y);
+
+				if (left == -1 || right == -1) return;
+
 				int temp;
 
 				if (left > right) {
@@ -506,6 +521,9 @@ class Scene {
 			for (int y=mid.y; y<=top.y; y++) {
 				int left = getx(top, bottom, y);
 				int right = getx(top, mid, y);
+
+
+				if (left == -1 || right == -1) return;
 				int temp;
 
 				if (left > right) {
