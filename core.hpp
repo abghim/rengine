@@ -350,6 +350,17 @@ struct screen {
         return 0;
     }
 
+
+    bool putcolor(int x, int y, rgb color)
+    {
+		unsigned char r = color.r;
+		unsigned char b = color.b;
+		unsigned char g = color.g;
+        if (r>255 || r<0 || g>255 || g<0 || b>255 || b<0) return 1;
+        data[x+height*y].putcolor(r, g, b);
+        return 0;
+    }
+
     bool putzbuf(int x, int y, double invz)
     {
         if (invz<0 || invz<this->data[x+height*y].invz) return 1;
@@ -372,13 +383,16 @@ class Scene {
 		actor object;
 		Camera camera;
 		Shader shader;
+		screen display;
 
 		/* simple obj viewer (no complex scene, no actor transforms) */
-		Scene(mesh *meshobj, /* cameara */ double x, double y, double z, double yaw, double pitch, double roll,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */) : camera(x, y, z, yaw, pitch, roll, fov, znear, zfar, width, height), object(meshobj), shader(){
+		Scene(mesh *meshobj, /* cameara */ double x, double y, double z, double yaw, double pitch, double roll,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */) 
+			: camera(x, y, z, yaw, pitch, roll, fov, znear, zfar, width, height), object(meshobj), shader(), display(width, height){
             // printf("Scene object initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
 		}
 
-		Scene(mesh *meshobj, /* cameara */ vec3d pos, vec3d rot,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */) : camera(pos, rot, fov, znear, zfar, width, height), object(meshobj), shader(){
+		Scene(mesh *meshobj, /* cameara */ vec3d pos, vec3d rot,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */)
+			: camera(pos, rot, fov, znear, zfar, width, height), object(meshobj), shader(), display(width, height) {
 		    // printf("Scene initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
 		}
 
@@ -421,6 +435,81 @@ class Scene {
                 vs[2] = camera.apply((object.model->vertexes)[face.i3]);
                 ret.push_back(triangle3d(vs[0], vs[1], vs[2]));
             } return ret;
+		}
+
+		void update() {
+			
+			for (triangle3d tri : tris()) {
+				SDL_Vertex element[3];
+				SDL_Color  c = {(unsigned char)tri.color.r, (unsigned char)tri.color.g, (unsigned char)tri.color.b, 255};
+				for (int i = 0; i < 3; ++i) {
+					element[i].position = (SDL_FPoint) {(float)tri.p[i].x, (float)tri.p[i].y};
+					element[i].color    = c;
+					element[i].tex_coord = (SDL_FPoint){ 0, 0 };    /* unused */
+				}
+			}
+	
+		}
+
+	private:
+		int getx(vec3d a, vec3d b, int y) {
+			return (int) ((y-a.y)*(a.x-b.x)/(a.y-b.y)+a.x);
+		}
+		void puttri(triangle3d t) {
+			vec3d top, mid, bottom;
+			if (t.p[0].y >= t.p[1].y) {
+				if (t.p[1].y >= t.p[2].y) {
+					top = t.p[0]; mid = t.p[1]; bottom = t.p[2];
+				} else {
+					if (t.p[0].y >= t.p[2].y) {
+						top = t.p[0]; mid = t.p[2]; bottom = t.p[1];
+					} else {
+						top = t.p[2]; mid = t.p[0]; bottom = t.p[1];
+					}
+				}
+			} else {
+				if (t.p[0].y >= t.p[2].y) {
+					top = t.p[1]; mid = t.p[0]; bottom = t.p[2];
+				} else {
+					if (t.p[1].y >= t.p[2].y) {
+						top = t.p[1]; mid = t.p[2]; bottom = t.p[0];
+					} else {
+						top = t.p[2]; mid = t.p[1]; bottom = t.p[0];
+					}
+				}
+			}
+
+			for (int y=bottom.y; y<mid.y; y++) {
+				int left = getx(top, bottom, y);
+				int right = getx(bottom, mid, y);
+				int temp;
+
+				if (left > right) {
+					temp = right;
+					right = left;
+					left = temp;
+				}
+				
+				for (int x=left; x<=right; x++) {
+					display.putcolor(x, y, t.color);
+				}
+			}
+
+			for (int y=mid.y; y<=top.y; y++) {
+				int left = getx(top, bottom, y);
+				int right = getx(top, mid, y);
+				int temp;
+
+				if (left > right) {
+					temp = right;
+					right = left;
+					left = temp;
+				}
+				
+				for (int x=left; x<=right; x++) {
+					display.putcolor(x, y, t.color);
+				}
+			}	
 		}
 
 };
