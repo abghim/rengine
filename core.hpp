@@ -497,7 +497,11 @@ class Scene {
 				}
 			}
 
-			for (int y=bottom.y; y<mid.y; y++) {
+			int lower_start = (int) std::ceil(bottom.y);
+			int upper_start = (int) std::ceil(mid.y);
+			int upper_end = (int) std::floor(top.y);
+
+			for (int y=lower_start; y<upper_start; y++) {
 				int left = getx(top, bottom, y);
 				int right = getx(bottom, mid, y);
 
@@ -517,7 +521,7 @@ class Scene {
 				}
 			}
 
-			for (int y=mid.y; y<=top.y; y++) {
+			for (int y=upper_start; y<=upper_end; y++) {
 				int left = getx(top, bottom, y);
 				int right = getx(top, mid, y);
 
