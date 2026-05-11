@@ -1,5 +1,6 @@
 #include <SDL.h>
 #include <cstdio>
+#include <vector>
 #include "core.hpp"
 
 #define rad(x) ((x)*M_PI/180)
@@ -13,7 +14,7 @@ int main()
     mesh("utah_teapot.obj").print();
 
     Scene scene(&utah_mesh, 2, 4, 6, rad(17), rad(-10), rad(5), rad(80), 0.1, 1500, 800, 600);
-    screen viewport1(800, 600);
+    screen &viewport1 = scene.display;
 
     vec3d camera_pos = scene.camera.getpos();
     vec3d camear_dir = scene.camera.getrot();
@@ -34,6 +35,24 @@ int main()
 
         SDL_Quit(); return 1;
     }
+
+
+    SDL_Texture* texture = SDL_CreateTexture(
+        ren,
+        SDL_PIXELFORMAT_ARGB8888,
+        SDL_TEXTUREACCESS_STREAMING,
+        viewport1.width,
+        viewport1.height
+    );
+
+    if (!texture) {
+        fprintf(stderr, "texture creation error\n");
+        SDL_DestroyRenderer(ren);
+        SDL_DestroyWindow(win);
+        SDL_Quit(); return 1;
+    }
+
+    std::vector<Uint32> frame_pixels(viewport1.width * viewport1.height);
 
     bool running = 1;
     while (running) {
@@ -72,19 +91,38 @@ int main()
         SDL_RenderClear(ren);
 
 
-
+/*
         for (triangle3d tri : scene.tris()) {
             SDL_Vertex element[3];
             SDL_Color  c = {(unsigned char)tri.color.r, (unsigned char)tri.color.g, (unsigned char)tri.color.b, 255};
             for (int i = 0; i < 3; ++i) {
                 element[i].position = (SDL_FPoint) {(float)tri.p[i].x, (float)tri.p[i].y};
                 element[i].color    = c;
-                element[i].tex_coord = (SDL_FPoint){ 0, 0 };    /* unused */
+                element[i].tex_coord = (SDL_FPoint){ 0, 0 };  // unused 
             }
-            SDL_RenderGeometry(ren, /*texture*/NULL, element, 3, NULL, 0);
+            SDL_RenderGeometry(ren, NULL, element, 3, NULL, 0);
         }
+	*/
+		scene.update();
+		for (int x=0; x<viewport1.width; x++) {
+			for (int y=0; y<viewport1.height; y++) {
+				rgb cl = viewport1.get(x, y).color;
+				frame_pixels[y * viewport1.width + x] =
+					0xFF000000u |
+					(static_cast<Uint32>(cl.r) << 16) |
+					(static_cast<Uint32>(cl.g) << 8) |
+					 static_cast<Uint32>(cl.b);
+			}
+		}
+
+		SDL_UpdateTexture(texture, NULL, frame_pixels.data(), viewport1.width * sizeof(Uint32));
+		SDL_RenderCopy(ren, texture, NULL, NULL);
 
         SDL_RenderPresent(ren);
     }
+	SDL_DestroyTexture(texture);
+	SDL_DestroyRenderer(ren);
+	SDL_DestroyWindow(win);
+	SDL_Quit();
 	return 0;
 }

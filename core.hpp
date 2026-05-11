@@ -440,13 +440,7 @@ class Scene {
 		void update() {
 			
 			for (triangle3d tri : tris()) {
-				SDL_Vertex element[3];
-				SDL_Color  c = {(unsigned char)tri.color.r, (unsigned char)tri.color.g, (unsigned char)tri.color.b, 255};
-				for (int i = 0; i < 3; ++i) {
-					element[i].position = (SDL_FPoint) {(float)tri.p[i].x, (float)tri.p[i].y};
-					element[i].color    = c;
-					element[i].tex_coord = (SDL_FPoint){ 0, 0 };    /* unused */
-				}
+				puttri(tri);
 			}
 	
 		}
@@ -455,6 +449,7 @@ class Scene {
 		int getx(vec3d a, vec3d b, int y) {
 			return (int) ((y-a.y)*(a.x-b.x)/(a.y-b.y)+a.x);
 		}
+
 		void puttri(triangle3d t) {
 			vec3d top, mid, bottom;
 			if (t.p[0].y >= t.p[1].y) {
@@ -492,6 +487,7 @@ class Scene {
 				
 				for (int x=left; x<=right; x++) {
 					display.putcolor(x, y, t.color);
+					/*TODO: add z-buffering*/
 				}
 			}
 
@@ -508,6 +504,7 @@ class Scene {
 				
 				for (int x=left; x<=right; x++) {
 					display.putcolor(x, y, t.color);
+					/*TODO: add z-buffering*/
 				}
 			}	
 		}
