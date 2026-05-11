@@ -472,7 +472,6 @@ class Scene {
 		}
 
 		void puttri(triangle3d t) {
-
 			if (oob(t.p[0]) && oob(t.p[1]) && oob(t.p[2])) return;
 
 			vec3d top, mid, bottom;
@@ -522,7 +521,6 @@ class Scene {
 				int left = getx(top, bottom, y);
 				int right = getx(top, mid, y);
 
-
 				if (left == -1 || right == -1) return;
 				int temp;
 
@@ -536,7 +534,7 @@ class Scene {
 					display.putcolor(x, y, t.color);
 					/*TODO: add z-buffering*/
 				}
-			}	
+			}
 		}
 
 };
