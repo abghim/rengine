@@ -344,17 +344,12 @@ struct screen {
     ~screen() {
         free(data);
     }
-
-    bool putcolor(int x, int y, unsigned char r, unsigned char g, unsigned char b)
-    {
-        if (r>255 || r<0 || g>255 || g<0 || b>255 || b<0) return 1;
-        data[x+width*y].putcolor(r, g, b);
-        return 0;
-    }
-
-
     bool putcolor(int x, int y, rgb color)
     {
+		if (x<0 || y<0 || x >= width || y >= height) {
+	//		fprintf(stderr, "Accessing outside screen %d %d \n", x, y);
+			return 1;
+		}
 		unsigned char r = color.r;
 		unsigned char b = color.b;
 		unsigned char g = color.g;
@@ -441,8 +436,9 @@ class Scene {
 
 		void update() {
 			for (int k=0; k<display.width; k++) {
-				for (int l=0; l<display.height; l++)
+				for (int l=0; l<display.height; l++) {
 					display.putcolor(k, l, BLACK);
+				}
 			}
 			
 			for (triangle3d tri : tris()) {
@@ -453,10 +449,20 @@ class Scene {
 
 	private:
 		int getx(vec3d a, vec3d b, int y) {
+			if (a.y == b.y) {
+				return y;
+			}
 			return (int) ((y-a.y)*(a.x-b.x)/(a.y-b.y)+a.x);
 		}
 
+		bool oob(vec3d p) {
+			return p.x >= display.width || p.y >= display.height;
+		}
+
 		void puttri(triangle3d t) {
+
+			if (oob(t.p[0]) && oob(t.p[1]) && oob(t.p[2])) return;
+
 			vec3d top, mid, bottom;
 			if (t.p[0].y >= t.p[1].y) {
 				if (t.p[1].y >= t.p[2].y) {
