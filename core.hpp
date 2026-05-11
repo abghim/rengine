@@ -11,6 +11,7 @@
 #include <stdlib.h>
 
 #define DEV_SCALE_MESH 1
+#define BLACK rgb()
 
 using std::ifstream;
 using std::strstream;
@@ -151,6 +152,7 @@ struct mesh {
                 triangle face;
 
 				s >> junk >> face.i1 >> face.i2 >> face.i3;
+				face.i1--; face.i2--; face.i3--;
 
 				faces.push_back(face);
 			}
@@ -346,7 +348,7 @@ struct screen {
     bool putcolor(int x, int y, unsigned char r, unsigned char g, unsigned char b)
     {
         if (r>255 || r<0 || g>255 || g<0 || b>255 || b<0) return 1;
-        data[x+height*y].putcolor(r, g, b);
+        data[x+width*y].putcolor(r, g, b);
         return 0;
     }
 
@@ -357,20 +359,20 @@ struct screen {
 		unsigned char b = color.b;
 		unsigned char g = color.g;
         if (r>255 || r<0 || g>255 || g<0 || b>255 || b<0) return 1;
-        data[x+height*y].putcolor(r, g, b);
+        data[x+width*y].putcolor(r, g, b);
         return 0;
     }
 
     bool putzbuf(int x, int y, double invz)
     {
-        if (invz<0 || invz<this->data[x+height*y].invz) return 1;
-        data[x+height*y].setdepth(invz);
+        if (invz<0 || invz<this->data[x+width*y].invz) return 1;
+        data[x+width*y].setdepth(invz);
         return 0;
     }
 
     pixel get(int x, int y)
     {
-        return data[x+height*y];
+        return data[x+width*y];
     }
 
 };
@@ -438,6 +440,10 @@ class Scene {
 		}
 
 		void update() {
+			for (int k=0; k<display.width; k++) {
+				for (int l=0; l<display.height; l++)
+					display.putcolor(k, l, BLACK);
+			}
 			
 			for (triangle3d tri : tris()) {
 				puttri(tri);
