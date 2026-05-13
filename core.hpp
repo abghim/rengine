@@ -279,7 +279,7 @@ class Camera
 			// vec3d ndc = (project*(view*in));
 			//
 			
-			return vec3d((ndc.x+1)*width/2, (-ndc.y+1)*height/2, 1.0/(view*p).z);
+			return vec3d((ndc.x+1)*width/2, (-ndc.y+1)*height/2, -1.0/(view*p).z);
 			// return ndc;
 		}
 };
@@ -349,12 +349,12 @@ struct screen {
 
     screen(int w, int h) : width(w), height(h)
     {
-        data = (pixel *) malloc(sizeof(pixel)*w*h);
+        data = new pixel[w*h];
         if (data == NULL) fprintf(stderr, "Screen allocation failed.\n");
     }
 
     ~screen() {
-        free(data);
+        delete[] data;
     }
 
 	bool put(int x, int y, rgb color, double invz) {
@@ -377,6 +377,9 @@ struct screen {
 
     bool putzbuf(int x, int y, double invz)
     {
+        if (x<0 || y<0 || x >= width || y >= height) {
+            return false;
+        }
         if (invz<0 || invz<this->data[x+width*y].invz) return false;
         data[x+width*y].setdepth(invz);
         return true;
@@ -468,6 +471,7 @@ class Scene {
 			for (int k=0; k<display.width; k++) {
 				for (int l=0; l<display.height; l++) {
 					display.putcolor(k, l, BLACK);
+					display.data[k+display.width*l].setdepth(0.0);
 				}
 			}
 			
@@ -485,11 +489,11 @@ class Scene {
 			return (int) ((y-a.y)*(a.x-b.x)/(a.y-b.y)+a.x);
 		}
 
-		int getinvz(vec3d a, vec3d b, int y) {
+		double getinvz(vec3d a, vec3d b, int y) {
 					if (a.y == b.y) {
 				return -1;
 			}
-			return (int) ((y-a.y)*(a.z-b.z)/(a.y-b.y)+a.z);
+			return ((y-a.y)*(a.z-b.z)/(a.y-b.y)+a.z);
 		}
 
 
@@ -530,8 +534,8 @@ class Scene {
 			for (int y=lower_start; y<upper_start; y++) {
 				int left = getx(top, bottom, y);
 				int right = getx(bottom, mid, y);
-				int invz_left = getinvz(top, bottom, y);
-				int invz_right = getinvz(bottom, mid, y);
+				double invz_left = getinvz(top, bottom, y);
+				double invz_right = getinvz(bottom, mid, y);
 
 
 				if (left == -1 || right == -1) return;
@@ -564,8 +568,8 @@ class Scene {
 			for (int y=upper_start; y<=upper_end; y++) {
 				int left = getx(top, bottom, y);
 				int right = getx(top, mid, y);
-				int invz_left = getinvz(top, bottom, y);
-				int invz_right = getinvz(top, mid, y);
+				double invz_left = getinvz(top, bottom, y);
+				double invz_right = getinvz(top, mid, y);
 
 
 				if (left == -1 || right == -1) return;
