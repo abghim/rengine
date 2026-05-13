@@ -6,12 +6,14 @@
 #include <math.h>
 #include <stdio.h>
 #include <iostream>
+#include <sstream>
 #include <strstream>
+#include <string>
 #include <utility>
 #include <vector>
 #include <stdlib.h>
 
-#define DEV_SCALE_MESH 1
+#define DEV_SCALE_MESH 1.3
 #define BLACK rgb()
 
 using std::ifstream;
@@ -140,16 +142,15 @@ struct mesh {
 	{
 		ifstream f(filename);
 
-		while (!f.eof())
+		std::string line;
+		while (std::getline(f, line))
 		{
-			char line[128];
-			f.getline(line, 128);
+			if (line.empty()) continue;
 
-			strstream s;
-			s << line;
+			std::stringstream s(line);
 			char junk;
 
-			if (line[0] == 'v' && line[1] != 'n' && line[1] != 't')
+			if (line[0] == 'v' && line.size() > 1 && line[1] != 'n' && line[1] != 't')
 			{
 				vec3d v;
 				s >> junk >> v.x >> v.y >> v.z;
@@ -158,12 +159,29 @@ struct mesh {
 
 			if (line[0] == 'f')
 			{
-                triangle face;
+				s >> junk;
 
-				s >> junk >> face.i1 >> face.i2 >> face.i3;
-				face.i1--; face.i2--; face.i3--;
+				vector<int> indexes;
+				std::string token;
+				while (s >> token) {
+					size_t slash = token.find('/');
+					std::string vertex_index = token.substr(0, slash);
+					if (vertex_index.empty()) continue;
 
-				faces.push_back(face);
+					int index = std::stoi(vertex_index);
+					if (index > 0) index--;
+					else if (index < 0) index = (int) vertexes.size() + index;
+
+					indexes.push_back(index);
+				}
+
+				for (size_t i = 1; i + 1 < indexes.size(); i++) {
+	                triangle face;
+					face.i1 = indexes[0];
+					face.i2 = indexes[i];
+					face.i3 = indexes[i + 1];
+					faces.push_back(face);
+				}
 			}
 		}
 
@@ -478,9 +496,9 @@ class Scene {
 				if ((view * v1).z >= -znear || (view * v2).z >= -znear || (view * v3).z >= -znear) continue;
 
 			    vec3d vs[3];
-	                vs[0] = camera.apply((object.model->vertexes)[face.i1]);
-	                vs[1]= camera.apply((object.model->vertexes)[face.i2]);
-	                vs[2] = camera.apply((object.model->vertexes)[face.i3]);
+	                vs[0] = camera.apply(v1);
+	                vs[1]= camera.apply(v2);
+	                vs[2] = camera.apply(v3);
 	                ret.push_back(triangle3d(vs[0], vs[1], vs[2], shader.apply(v1, v2, v3, camera.getpos())));
             } return ret;
 		}
