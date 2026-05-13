@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <strstream>
+#include <utility>
 #include <vector>
 #include <stdlib.h>
 
@@ -267,10 +268,18 @@ class Camera
 		vec3d apply(vec3d &in)
 		{
 		    // updateview(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z);
+			vec3d p(
+				in.x * DEV_SCALE_MESH,
+				in.y * DEV_SCALE_MESH,
+				in.z * DEV_SCALE_MESH
+			);
 
-			vec3d ndc = (project*(view*vec3d(in.x*DEV_SCALE_MESH, in.y*DEV_SCALE_MESH, in.z*DEV_SCALE_MESH)));
+
+			vec3d ndc = project*(view*p);
 			// vec3d ndc = (project*(view*in));
-			return vec3d((ndc.x+1)*width/2, (-ndc.y+1)*height/2, 0.0);
+			//
+			
+			return vec3d((ndc.x+1)*width/2, (-ndc.y+1)*height/2, 1.0/(view*p).z);
 			// return ndc;
 		}
 };
@@ -347,29 +356,38 @@ struct screen {
     ~screen() {
         free(data);
     }
+
+	bool put(int x, int y, rgb color, double invz) {
+		return putcolor(x, y, color) && putzbuf(x, y, invz);
+	}
+
     bool putcolor(int x, int y, rgb color)
     {
 		if (x<0 || y<0 || x >= width || y >= height) {
 	//		fprintf(stderr, "Accessing outside screen %d %d \n", x, y);
-			return 1;
+			return false;
 		}
 		unsigned char r = color.r;
 		unsigned char b = color.b;
 		unsigned char g = color.g;
-        if (r>255 || r<0 || g>255 || g<0 || b>255 || b<0) return 1;
+        if (r>255 || r<0 || g>255 || g<0 || b>255 || b<0) return false;
         data[x+width*y].putcolor(r, g, b);
-        return 0;
+        return true;
     }
 
     bool putzbuf(int x, int y, double invz)
     {
-        if (invz<0 || invz<this->data[x+width*y].invz) return 1;
+        if (invz<0 || invz<this->data[x+width*y].invz) return false;
         data[x+width*y].setdepth(invz);
-        return 0;
+        return true;
     }
 
     pixel get(int x, int y)
     {
+		if (x<0 || y<0 || x >= width || y >= height) {
+	//		fprintf(stderr, "Accessing outside screen %d %d \n", x, y);
+			return pixel();
+		}
         return data[x+width*y];
     }
 
@@ -413,7 +431,7 @@ class Scene {
             } return;
 		}
 
-		void _showscene /* dev option: don't have SDL visualizer yet, output to file instead */ ()
+		void _showscene /* dev option: don't have SDL visualizer yet, output to file instead => no longer relevant */ ()
 		{
 		    std::cout << camera.getwidth() << '\n';
 			std::cout << camera.getheight() << '\n';
@@ -435,7 +453,7 @@ class Scene {
 				vec3d v2 = (object.model->vertexes)[face.i2] * DEV_SCALE_MESH;
 				vec3d v3 = (object.model->vertexes)[face.i3] * DEV_SCALE_MESH;
 
-				// Coarse near-plane rejection to avoid projecting giant triangles.
+				/* very patchy solution for too-close triangles, revise later */
 				if ((view * v1).z >= -znear || (view * v2).z >= -znear || (view * v3).z >= -znear) continue;
 
 			    vec3d vs[3];
@@ -466,6 +484,14 @@ class Scene {
 			}
 			return (int) ((y-a.y)*(a.x-b.x)/(a.y-b.y)+a.x);
 		}
+
+		int getinvz(vec3d a, vec3d b, int y) {
+					if (a.y == b.y) {
+				return -1;
+			}
+			return (int) ((y-a.y)*(a.z-b.z)/(a.y-b.y)+a.z);
+		}
+
 
 		bool oob(vec3d p) {
 			return p.x<0 ||p.y<0 || p.x >= display.width || p.y >= display.height;
@@ -504,39 +530,67 @@ class Scene {
 			for (int y=lower_start; y<upper_start; y++) {
 				int left = getx(top, bottom, y);
 				int right = getx(bottom, mid, y);
+				int invz_left = getinvz(top, bottom, y);
+				int invz_right = getinvz(bottom, mid, y);
+
 
 				if (left == -1 || right == -1) return;
 
 				int temp;
 
 				if (left > right) {
-					temp = right;
-					right = left;
-					left = temp;
+					std::swap(left, right);
+					std::swap(invz_left, invz_right);
 				}
 				
 				for (int x=left; x<=right; x++) {
-					display.putcolor(x, y, t.color);
-					/*TODO: add z-buffering*/
+					double h;
+
+					if (left == right) {
+						h = invz_left;
+					} else {
+						double tx = (double)(x - left) / (double)(right - left);
+						h = invz_left + tx * (invz_right - invz_left);
+					}
+
+					if (h > display.get(x, y).invz) {
+						display.putcolor(x, y, t.color);
+						display.putzbuf(x, y, h);
+					}
+				/*TODO: add z-buffering*/
 				}
 			}
 
 			for (int y=upper_start; y<=upper_end; y++) {
 				int left = getx(top, bottom, y);
 				int right = getx(top, mid, y);
+				int invz_left = getinvz(top, bottom, y);
+				int invz_right = getinvz(top, mid, y);
+
 
 				if (left == -1 || right == -1) return;
 				int temp;
 
 				if (left > right) {
-					temp = right;
-					right = left;
-					left = temp;
+					std::swap(left, right);
+					std::swap(invz_left, invz_right);
 				}
 				
 				for (int x=left; x<=right; x++) {
-					display.putcolor(x, y, t.color);
-					/*TODO: add z-buffering*/
+					double h;
+
+					if (left == right) {
+						h = invz_left;
+					} else {
+						double tx = (double)(x - left) / (double)(right - left);
+						h = invz_left + tx * (invz_right - invz_left);
+					}
+
+					if (h > display.get(x, y).invz) {
+						display.putcolor(x, y, t.color);
+						display.putzbuf(x, y, h);
+					}
+				/*TODO: add z-buffering*/
 				}
 			}
 		}
