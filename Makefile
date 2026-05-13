@@ -12,3 +12,5 @@ clean:
 	rm *.o
 	rm rengine
 
+run: rengine
+	./rengine
