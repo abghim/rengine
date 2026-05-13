@@ -6,17 +6,10 @@
 #include <fstream>
 #include <math.h>
 #include <stdio.h>
-#include <iostream>
-#include <strstream>
-#include <vector>
 #include <stdlib.h>
 #include "core.hpp"
 
-#define DEV_SCALE_MESH 1
-
 using std::ifstream;
-using std::strstream;
-using std::vector;
 
 void matprint(mat4x4 m)
 {
