@@ -112,6 +112,14 @@ struct triangle3d {
         p[1] = p2;
         p[2] = p3;
 	}
+
+	triangle3d(vec3d p1, vec3d p2, vec3d p3, rgb color)
+	{
+        p[0] = p1;
+        p[1] = p2;
+        p[2] = p3;
+		this->color = color;
+	}
 };
 
 struct triangle {
@@ -302,14 +310,24 @@ class Shader {
 		rgb apply(vec3d v1, vec3d v2, vec3d v3, vec3d campos)
 			/* triangle-level shading -- pixel-level to be added */
 		{
-			vec3d l(0.0, -1.0, 0.0);
-			vec3d r = reflectedDirection(l, calculateUnitNormal(v1, v2, v3));
+			vec3d light_dir = vec3d(0.0, -1.0, -1.0).normalize();
+			vec3d normal = calculateUnitNormal(v1, v2, v3);
+			vec3d center = (v1 + v2 + v3) * (1.0 / 3.0);
+			vec3d view_dir = (campos - center).normalize();
 
-			rgb color(0, 0, 0);
-			color.r = (int) dot(campos -v1, r)*255;
-			color.g = (int) dot(campos-v1, r)*255;
-			color.b = (int) dot(campos-v1, r)*255;
-			return color;
+			double diffuse = dot(normal, light_dir * -1.0);
+			if (diffuse < 0.0) diffuse = 0.0;
+
+			vec3d reflected = reflectedDirection(light_dir, normal).normalize();
+			double specular = dot(view_dir, reflected);
+			if (specular < 0.0) specular = 0.0;
+			specular = specular * specular * specular * specular;
+
+			double intensity = 0.18 + 0.72 * diffuse + 0.10 * specular;
+			if (intensity > 1.0) intensity = 1.0;
+
+			unsigned char shade = (unsigned char) (intensity * 255.0);
+			return rgb(shade, shade, shade);
 		}
 };
 
@@ -463,7 +481,7 @@ class Scene {
 	                vs[0] = camera.apply((object.model->vertexes)[face.i1]);
 	                vs[1]= camera.apply((object.model->vertexes)[face.i2]);
 	                vs[2] = camera.apply((object.model->vertexes)[face.i3]);
-                ret.push_back(triangle3d(vs[0], vs[1], vs[2]));
+	                ret.push_back(triangle3d(vs[0], vs[1], vs[2], shader.apply(v1, v2, v3, camera.getpos())));
             } return ret;
 		}
 
