@@ -2,7 +2,7 @@ init = function()
 	rengine.camera.setpos(2, 4, 6)
 	rengine.camera.setrot(math.rad(17), math.rad(-10), math.rad(5))
 
-	rengine.actor.new("assets/tie.obj")
+	rengine.actor.new("assets/star_destroyer.obj")
 end
 
 update = function()

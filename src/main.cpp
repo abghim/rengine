@@ -11,7 +11,7 @@ extern "C" {
 
 #define rad(x) ((x)*M_PI/180)
 
-#define LUA_FILE "scripts/test1.lua"
+#define LUA_FILE "scripts/destroyer_flyover.lua"
 
 Scene *sceneptr;
 
@@ -367,15 +367,14 @@ int main()
 
 
 		scene.update();
-		for (int x=0; x<viewport1.width; x++) {
-			for (int y=0; y<viewport1.height; y++) {
-				rgb cl = viewport1.get(x, y).color;
-				frame_pixels[y * viewport1.width + x] =
-					0xFF000000u |
-					(static_cast<Uint32>(cl.r) << 16) |
-					(static_cast<Uint32>(cl.g) << 8) |
-					 static_cast<Uint32>(cl.b);
-			}
+		int pixel_count = viewport1.width * viewport1.height;
+		for (int i = 0; i < pixel_count; i++) {
+			rgb cl = viewport1.data[i].color;
+			frame_pixels[i] =
+				0xFF000000u |
+				(static_cast<Uint32>(cl.r) << 16) |
+				(static_cast<Uint32>(cl.g) << 8) |
+				 static_cast<Uint32>(cl.b);
 		}
 
 		SDL_UpdateTexture(texture, NULL, frame_pixels.data(), viewport1.width * sizeof(Uint32));

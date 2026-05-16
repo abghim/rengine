@@ -255,7 +255,7 @@ struct actor {
 	double scale;
 
 	actor(mesh m) {
-		this->model = m;
+		this->model = std::move(m);
 		this->translate = vec3d();
 		this->rotate = vec3d();
 		this->scale = 1.0;
@@ -268,7 +268,8 @@ struct actor {
 
 	vector<triangle3d> gettri() {
 		vector<triangle3d> list{};
-		for (triangle face : model.faces) {
+		list.reserve(model.faces.size());
+		for (const triangle &face : model.faces) {
 			vec3d v1 = (model.vertexes)[face.i1];
 			vec3d v2 = (model.vertexes)[face.i2];
 			vec3d v3 = (model.vertexes)[face.i3];
@@ -455,9 +456,18 @@ struct screen {
         if (data == NULL) fprintf(stderr, "Screen allocation failed.\n");
     }
 
-    ~screen() {
-        delete[] data;
-    }
+	~screen() {
+		delete[] data;
+	}
+
+	void clear()
+	{
+		int count = width * height;
+		for (int i = 0; i < count; i++) {
+			data[i].color = BLACK;
+			data[i].invz = 0.0;
+		}
+	}
 
 	bool put(int x, int y, rgb color, double invz) {
 		return putcolor(x, y, color) && putzbuf(x, y, invz);
@@ -585,15 +595,29 @@ class Scene {
 		}
 
 		void update() {
-			for (int k=0; k<display.width; k++) {
-				for (int l=0; l<display.height; l++) {
-					display.putcolor(k, l, BLACK);
-					display.data[k+display.width*l].setdepth(0.0);
+			display.clear();
+
+			mat4x4 view = camera.getview();
+			double znear = camera.getznear();
+			vec3d camera_pos = camera.getpos();
+
+			for (const actor &object : actors) {
+				mat4x4 rot = mat4x4::getfromrot(object.rotate, object.translate);
+				mat4x4 trans = mat4x4::getfromtrans(object.translate);
+
+				for (const triangle &face : object.model.faces) {
+					vec3d v1 = rot * (trans * object.model.vertexes[face.i1]);
+					vec3d v2 = rot * (trans * object.model.vertexes[face.i2]);
+					vec3d v3 = rot * (trans * object.model.vertexes[face.i3]);
+
+					if ((view * v1).z >= -znear || (view * v2).z >= -znear || (view * v3).z >= -znear) continue;
+					if (dot(camera_pos - v1, calculateUnitNormal(v1, v2, v3)) < 0) continue;
+
+					vec3d vs1 = camera.apply(v1);
+					vec3d vs2 = camera.apply(v2);
+					vec3d vs3 = camera.apply(v3);
+					puttri(triangle3d(vs1, vs2, vs3, shader.apply(v1, v2, v3, camera_pos)));
 				}
-			}
-			
-			for (triangle3d tri : tris()) {
-				puttri(tri);
 			}
 	
 		}
@@ -618,7 +642,7 @@ class Scene {
 			return p.x<0 ||p.y<0 || p.x >= display.width || p.y >= display.height;
 		}
 
-		void puttri(triangle3d t) {
+		void puttri(const triangle3d &t) {
 			if (oob(t.p[0]) && oob(t.p[1]) && oob(t.p[2])) return;
 
 			vec3d top, mid, bottom;
@@ -684,9 +708,10 @@ class Scene {
 						h = invz_left + tx * (invz_right - invz_left);
 					}
 
-					if (h > display.get(x, y).invz) {
-						display.putcolor(x, y, t.color);
-						display.putzbuf(x, y, h);
+					pixel &target = display.data[x + display.width * y];
+					if (h > target.invz) {
+						target.color = t.color;
+						target.invz = h;
 					}
 				/*TODO: add z-buffering*/
 				}
@@ -721,9 +746,10 @@ class Scene {
 						h = invz_left + tx * (invz_right - invz_left);
 					}
 
-					if (h > display.get(x, y).invz) {
-						display.putcolor(x, y, t.color);
-						display.putzbuf(x, y, h);
+					pixel &target = display.data[x + display.width * y];
+					if (h > target.invz) {
+						target.color = t.color;
+						target.invz = h;
 					}
 				/*TODO: add z-buffering*/
 				}
