@@ -1,17 +1,258 @@
+extern "C" {
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+}
+
+#include <iostream>
 #include <SDL.h>
 #include <cstdio>
-#include <vector>
 #include "core.hpp"
 
 #define rad(x) ((x)*M_PI/180)
 
+#define LUA_FILE "scripts/main.lua"
+
+Scene *sceneptr;
+
+static int rengine_new_actor(lua_State *L) {
+	const char *filename = luaL_checkstring(L, 1);
+	ifstream f(filename);
+	if (!f.good()) {
+		return luaL_error(L, "cannot open mesh file '%s'", filename);
+	}
+	sceneptr->addmesh(filename);
+	return 0;
+}
+
+static int rengine_set_campos(lua_State *L) {
+	double x = luaL_checknumber(L, 1);
+	double y = luaL_checknumber(L, 2);
+	double z = luaL_checknumber(L, 3);
+
+	sceneptr->camera.updatepos(x, y, z);
+	return 0;
+}
+
+
+static int rengine_set_camrot(lua_State *L) {
+	double x = luaL_checknumber(L, 1);
+	double y = luaL_checknumber(L, 2);
+	double z = luaL_checknumber(L, 3);
+
+	sceneptr->camera.updaterot(x, y, z);
+	return 0;
+}
+
+
+static int rengine_set_campos_delta(lua_State *L) {
+	double x = luaL_checknumber(L, 1);
+	double y = luaL_checknumber(L, 2);
+	double z = luaL_checknumber(L, 3);
+
+	sceneptr->camera.updatepos(sceneptr->camera.getpos() + vec3d(x, y, z));
+	return 0;
+}
+
+
+static int rengine_set_camrot_delta(lua_State *L) {
+	double x = luaL_checknumber(L, 1);
+	double y = luaL_checknumber(L, 2);
+	double z = luaL_checknumber(L, 3);
+
+	sceneptr->camera.updaterot(sceneptr->camera.getrot() + vec3d(x, y, z));
+	return 0;
+}
+
+
+static actor &rengine_get_actor(lua_State *L, int i) {
+	int actor_index = (int) luaL_checkinteger(L, i);
+	if (actor_index < 0 || actor_index >= (int) sceneptr->actors.size()) {
+		luaL_error(L, "actor index %d out of range", actor_index);
+	}
+	return sceneptr->actors[actor_index];
+}
+
+
+static int rengine_set_actorpos(lua_State *L) {
+	actor &target = rengine_get_actor(L, 1);
+	double x = luaL_checknumber(L, 2);
+	double y = luaL_checknumber(L, 3);
+	double z = luaL_checknumber(L, 4);
+
+	target.translate = vec3d(x, y, z);
+	return 0;
+}
+
+
+static int rengine_set_actorrot(lua_State *L) {
+	actor &target = rengine_get_actor(L, 1);
+	double x = luaL_checknumber(L, 2);
+	double y = luaL_checknumber(L, 3);
+	double z = luaL_checknumber(L, 4);
+
+	target.rotate = vec3d(x, y, z);
+	return 0;
+}
+
+
+static int rengine_set_actorpos_delta(lua_State *L) {
+	actor &target = rengine_get_actor(L, 1);
+	double x = luaL_checknumber(L, 2);
+	double y = luaL_checknumber(L, 3);
+	double z = luaL_checknumber(L, 4);
+
+	target.translate = target.translate + vec3d(x, y, z);
+	return 0;
+}
+
+
+static int rengine_set_actorrot_delta(lua_State *L) {
+	actor &target = rengine_get_actor(L, 1);
+	double x = luaL_checknumber(L, 2);
+	double y = luaL_checknumber(L, 3);
+	double z = luaL_checknumber(L, 4);
+
+	target.rotate = target.rotate + vec3d(x, y, z);
+	return 0;
+}
+
+
+static bool rengine_call_lua_hook(lua_State *L, const char *name) {
+	lua_getglobal(L, name);
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return true;
+	}
+	if (!lua_isfunction(L, -1)) {
+		std::cerr << "Lua global '" << name << "' is not a function.\n";
+		lua_pop(L, 1);
+		return false;
+	}
+	if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+		std::cerr << "Lua " << name << " function failed: " << lua_tostring(L, -1) << "\n";
+		lua_pop(L, 1);
+		return false;
+	}
+	return true;
+}
+
+
+static bool rengine_call_keybind(lua_State *L, int scancode, bool shift) {
+	lua_getglobal(L, "keybind");
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return true;
+	}
+	if (!lua_isfunction(L, -1)) {
+		std::cerr << "Lua global 'keybind' is not a function.\n";
+		lua_pop(L, 1);
+		return false;
+	}
+
+	lua_pushinteger(L, scancode);
+	lua_pushboolean(L, shift);
+	if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+		std::cerr << "Lua keybind function failed: " << lua_tostring(L, -1) << "\n";
+		lua_pop(L, 1);
+		return false;
+	}
+	return true;
+}
+
+
 int main()
 {
     /* tests -> vectors */
+	lua_State *L = luaL_newstate();
+	luaL_openlibs(L);
+
+	/* build the api */
+
+	lua_newtable(L);
+
+	lua_newtable(L);
+	lua_pushcfunction(L, rengine_new_actor);
+	lua_setfield(L, -2, "new");
+	lua_pushcfunction(L, rengine_set_actorpos);
+	lua_setfield(L, -2, "setpos");
+	lua_pushcfunction(L, rengine_set_actorrot);
+	lua_setfield(L, -2, "setrot");
+	lua_pushcfunction(L, rengine_set_actorpos_delta);
+	lua_setfield(L, -2, "setpos_delta");
+	lua_pushcfunction(L, rengine_set_actorrot_delta);
+	lua_setfield(L, -2, "setrot_delta");
+	lua_setfield(L, -2, "actor");
+
+	lua_newtable(L);
+	lua_pushcfunction(L, rengine_set_campos);
+	lua_setfield(L, -2, "setpos");
+	lua_pushcfunction(L, rengine_set_camrot);
+	lua_setfield(L, -2, "setrot");
+	lua_pushcfunction(L, rengine_set_campos_delta);
+	lua_setfield(L, -2, "setpos_delta");
+	lua_pushcfunction(L, rengine_set_camrot_delta);
+	lua_setfield(L, -2, "setrot_delta");
+	lua_setfield(L, -2, "camera");
+
+	lua_newtable(L);
+#define SET_SDLKEY(name) \
+	lua_pushinteger(L, SDL_SCANCODE_##name); \
+	lua_setfield(L, -2, #name)
+	SET_SDLKEY(A);
+	SET_SDLKEY(B);
+	SET_SDLKEY(C);
+	SET_SDLKEY(D);
+	SET_SDLKEY(E);
+	SET_SDLKEY(F);
+	SET_SDLKEY(G);
+	SET_SDLKEY(H);
+	SET_SDLKEY(I);
+	SET_SDLKEY(J);
+	SET_SDLKEY(K);
+	SET_SDLKEY(L);
+	SET_SDLKEY(M);
+	SET_SDLKEY(N);
+	SET_SDLKEY(O);
+	SET_SDLKEY(P);
+	SET_SDLKEY(Q);
+	SET_SDLKEY(R);
+	SET_SDLKEY(S);
+	SET_SDLKEY(T);
+	SET_SDLKEY(U);
+	SET_SDLKEY(V);
+	SET_SDLKEY(W);
+	SET_SDLKEY(X);
+	SET_SDLKEY(Y);
+	SET_SDLKEY(Z);
+#undef SET_SDLKEY
+	lua_pushinteger(L, SDL_SCANCODE_UP);
+	lua_setfield(L, -2, "UP");
+	lua_pushinteger(L, SDL_SCANCODE_DOWN);
+	lua_setfield(L, -2, "DOWN");
+	lua_pushinteger(L, SDL_SCANCODE_LEFT);
+	lua_setfield(L, -2, "LEFT");
+	lua_pushinteger(L, SDL_SCANCODE_RIGHT);
+	lua_setfield(L, -2, "RIGHT");
+	lua_setfield(L, -2, "sdlkeys");
+
+	lua_setglobal(L, "rengine");
+
+	if (luaL_dofile(L, LUA_FILE) != LUA_OK) {
+		std::cerr << "Failed to load " << LUA_FILE << ": " << lua_tostring(L, -1) << "\n";
+		lua_close(L);
+		return 1;
+	}
 
     Scene scene(2, 4, 6, rad(17), rad(-10), rad(5), rad(80), 0.1, 1500, 1440, 830);
-	scene.addmesh("assets/tie.obj");
     screen &viewport1 = scene.display;
+
+	sceneptr = &scene;
+
+	if (!rengine_call_lua_hook(L, "init")) {
+		lua_close(L);
+		return 1;
+	}
 
     vec3d camera_pos = scene.camera.getpos();
     vec3d camear_dir = scene.camera.getrot();
@@ -53,61 +294,20 @@ int main()
 
     bool running = 1;
     while (running) {
-
-        vec3d camera_pos = scene.camera.getpos();
-        vec3d camera_dir = scene.camera.getrot();
-        vec3d object_rot = scene.actors[0].rotate;
-        vec3d object_pos = scene.actors[0].translate;
-
-
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT)
                 running = false;
             else if (e.type == SDL_KEYDOWN) {
                 bool shift = (e.key.keysym.mod & KMOD_SHIFT) != 0;
-                switch (e.key.keysym.scancode) {
-                    case SDL_SCANCODE_S:
-                        if (shift) scene.actors[0].translate = vec3d(object_pos.x, object_pos.y, object_pos.z+0.1);
-                        else scene.camera.updatepos(camera_pos.x, camera_pos.y, camera_pos.z+0.1);
-                        break;
-                    case SDL_SCANCODE_W:
-                        if (shift) scene.actors[0].translate = vec3d(object_pos.x, object_pos.y, object_pos.z-0.1);
-                        else scene.camera.updatepos(camera_pos.x, camera_pos.y, camera_pos.z-0.1);
-                        break;
-                    case SDL_SCANCODE_Q:
-                        if (shift) scene.actors[0].translate = vec3d(object_pos.x, object_pos.y+0.1, object_pos.z);
-                        else scene.camera.updatepos(camera_pos.x, camera_pos.y+0.1, camera_pos.z);
-                        break;
-                    case SDL_SCANCODE_E:
-                        if (shift) scene.actors[0].translate = vec3d(object_pos.x, object_pos.y-0.1, object_pos.z);
-                        else scene.camera.updatepos(camera_pos.x, camera_pos.y-0.1, camera_pos.z);
-                        break;
-                    case SDL_SCANCODE_A:
-                        if (shift) scene.actors[0].translate = vec3d(object_pos.x+0.1, object_pos.y, object_pos.z);
-                        else scene.camera.updatepos(camera_pos.x+0.1, camera_pos.y, camera_pos.z);
-                        break;
-                    case SDL_SCANCODE_D:
-                        if (shift) scene.actors[0].translate = vec3d(object_pos.x-0.1, object_pos.y, object_pos.z);
-                        else scene.camera.updatepos(camera_pos.x-0.1, camera_pos.y, camera_pos.z);
-                        break;
-
-                    case SDL_SCANCODE_Z: scene.camera.updaterot(camera_dir.x, camera_dir.y, camera_dir.z+rad(1)); break;
-                    case SDL_SCANCODE_X: scene.camera.updaterot(camera_dir.x, camera_dir.y, camera_dir.z-rad(1)); break;
-                    case SDL_SCANCODE_UP: scene.camera.updaterot(camera_dir.x, camera_dir.y-rad(1), camera_dir.z); break;
-                    case SDL_SCANCODE_DOWN: scene.camera.updaterot(camera_dir.x, camera_dir.y+rad(1), camera_dir.z); break;
-                    case SDL_SCANCODE_RIGHT: scene.camera.updaterot(camera_dir.x+rad(1), camera_dir.y, camera_dir.z); break;
-                    case SDL_SCANCODE_LEFT: scene.camera.updaterot(camera_dir.x-rad(1), camera_dir.y, camera_dir.z); break;
-
-                    case SDL_SCANCODE_H: scene.actors[0].rotate = vec3d(object_rot.x-rad(1), object_rot.y, object_rot.z); break;
-                    case SDL_SCANCODE_L: scene.actors[0].rotate = vec3d(object_rot.x+rad(1), object_rot.y, object_rot.z); break;
-                    case SDL_SCANCODE_K: scene.actors[0].rotate = vec3d(object_rot.x, object_rot.y-rad(1), object_rot.z); break;
-                    case SDL_SCANCODE_J: scene.actors[0].rotate = vec3d(object_rot.x, object_rot.y+rad(1), object_rot.z); break;
-                    case SDL_SCANCODE_U: scene.actors[0].rotate = vec3d(object_rot.x, object_rot.y, object_rot.z-rad(1)); break;
-                    case SDL_SCANCODE_I: scene.actors[0].rotate = vec3d(object_rot.x, object_rot.y, object_rot.z+rad(1)); break;
-
-                    default: break;
-                }
+				if (!rengine_call_keybind(L, e.key.keysym.scancode, shift)) {
+					lua_close(L);
+					SDL_DestroyTexture(texture);
+					SDL_DestroyRenderer(ren);
+					SDL_DestroyWindow(win);
+					SDL_Quit();
+					return 1;
+				}
             }
 
         }
@@ -128,6 +328,15 @@ int main()
             SDL_RenderGeometry(ren, NULL, element, 3, NULL, 0);
         }
 	*/
+
+		if (!rengine_call_lua_hook(L, "update")) {
+			lua_close(L);
+			return 1;
+		}
+
+
+
+
 		scene.update();
 		for (int x=0; x<viewport1.width; x++) {
 			for (int y=0; y<viewport1.height; y++) {
@@ -145,6 +354,8 @@ int main()
 
         SDL_RenderPresent(ren);
     }
+
+	lua_close(L);
 	SDL_DestroyTexture(texture);
 	SDL_DestroyRenderer(ren);
 	SDL_DestroyWindow(win);
