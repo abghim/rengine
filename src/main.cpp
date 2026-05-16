@@ -11,7 +11,7 @@ extern "C" {
 
 #define rad(x) ((x)*M_PI/180)
 
-#define LUA_FILE "scripts/main.lua"
+#define LUA_FILE "scripts/test1.lua"
 
 Scene *sceneptr;
 
@@ -161,6 +161,28 @@ static bool rengine_call_keybind(lua_State *L, int scancode, bool shift) {
 }
 
 
+static bool rengine_call_update(lua_State *L, double delta_t) {
+	lua_getglobal(L, "update");
+	if (lua_isnil(L, -1)) {
+		lua_pop(L, 1);
+		return true;
+	}
+	if (!lua_isfunction(L, -1)) {
+		std::cerr << "Lua global 'update' is not a function.\n";
+		lua_pop(L, 1);
+		return false;
+	}
+
+	lua_pushnumber(L, delta_t);
+	if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+		std::cerr << "Lua update function failed: " << lua_tostring(L, -1) << "\n";
+		lua_pop(L, 1);
+		return false;
+	}
+	return true;
+}
+
+
 int main()
 {
     /* tests -> vectors */
@@ -283,7 +305,7 @@ int main()
         viewport1.height
     );
 
-    if (!texture) {
+	if (!texture) {
         fprintf(stderr, "texture creation error\n");
         SDL_DestroyRenderer(ren);
         SDL_DestroyWindow(win);
@@ -291,9 +313,16 @@ int main()
     }
 
     std::vector<Uint32> frame_pixels(viewport1.width * viewport1.height);
+    double perf_freq = (double) SDL_GetPerformanceFrequency();
+    Uint64 last_counter = SDL_GetPerformanceCounter();
 
     bool running = 1;
     while (running) {
+        Uint64 now = SDL_GetPerformanceCounter();
+        double delta_t = (double) (now - last_counter) / perf_freq;
+        last_counter = now;
+        if (delta_t > 0.1) delta_t = 0.1;
+
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT)
@@ -329,7 +358,7 @@ int main()
         }
 	*/
 
-		if (!rengine_call_lua_hook(L, "update")) {
+		if (!rengine_call_update(L, delta_t)) {
 			lua_close(L);
 			return 1;
 		}
