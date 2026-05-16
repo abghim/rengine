@@ -56,6 +56,8 @@ int main()
 
         vec3d camera_pos = scene.camera.getpos();
         vec3d camera_dir = scene.camera.getrot();
+        vec3d object_rot = scene.object.rotate;
+        vec3d object_pos = scene.object.translate;
 
 
         SDL_Event e;
@@ -63,13 +65,32 @@ int main()
             if (e.type == SDL_QUIT)
                 running = false;
             else if (e.type == SDL_KEYDOWN) {
+                bool shift = (e.key.keysym.mod & KMOD_SHIFT) != 0;
                 switch (e.key.keysym.scancode) {
-                    case SDL_SCANCODE_S: scene.camera.updatepos(camera_pos.x, camera_pos.y, camera_pos.z+0.1); break;
-                    case SDL_SCANCODE_W: scene.camera.updatepos(camera_pos.x, camera_pos.y, camera_pos.z-0.1); break;
-                    case SDL_SCANCODE_Q: scene.camera.updatepos(camera_pos.x, camera_pos.y+0.1, camera_pos.z); break;
-                    case SDL_SCANCODE_E: scene.camera.updatepos(camera_pos.x, camera_pos.y-0.1, camera_pos.z); break;
-                    case SDL_SCANCODE_A: scene.camera.updatepos(camera_pos.x+0.1, camera_pos.y, camera_pos.z); break;
-                    case SDL_SCANCODE_D: scene.camera.updatepos(camera_pos.x-0.1, camera_pos.y, camera_pos.z); break;
+                    case SDL_SCANCODE_S:
+                        if (shift) scene.object.translate = vec3d(object_pos.x, object_pos.y, object_pos.z+0.1);
+                        else scene.camera.updatepos(camera_pos.x, camera_pos.y, camera_pos.z+0.1);
+                        break;
+                    case SDL_SCANCODE_W:
+                        if (shift) scene.object.translate = vec3d(object_pos.x, object_pos.y, object_pos.z-0.1);
+                        else scene.camera.updatepos(camera_pos.x, camera_pos.y, camera_pos.z-0.1);
+                        break;
+                    case SDL_SCANCODE_Q:
+                        if (shift) scene.object.translate = vec3d(object_pos.x, object_pos.y+0.1, object_pos.z);
+                        else scene.camera.updatepos(camera_pos.x, camera_pos.y+0.1, camera_pos.z);
+                        break;
+                    case SDL_SCANCODE_E:
+                        if (shift) scene.object.translate = vec3d(object_pos.x, object_pos.y-0.1, object_pos.z);
+                        else scene.camera.updatepos(camera_pos.x, camera_pos.y-0.1, camera_pos.z);
+                        break;
+                    case SDL_SCANCODE_A:
+                        if (shift) scene.object.translate = vec3d(object_pos.x+0.1, object_pos.y, object_pos.z);
+                        else scene.camera.updatepos(camera_pos.x+0.1, camera_pos.y, camera_pos.z);
+                        break;
+                    case SDL_SCANCODE_D:
+                        if (shift) scene.object.translate = vec3d(object_pos.x-0.1, object_pos.y, object_pos.z);
+                        else scene.camera.updatepos(camera_pos.x-0.1, camera_pos.y, camera_pos.z);
+                        break;
 
                     case SDL_SCANCODE_Z: scene.camera.updaterot(camera_dir.x, camera_dir.y, camera_dir.z+rad(1)); break;
                     case SDL_SCANCODE_X: scene.camera.updaterot(camera_dir.x, camera_dir.y, camera_dir.z-rad(1)); break;
@@ -77,6 +98,13 @@ int main()
                     case SDL_SCANCODE_DOWN: scene.camera.updaterot(camera_dir.x, camera_dir.y+rad(1), camera_dir.z); break;
                     case SDL_SCANCODE_RIGHT: scene.camera.updaterot(camera_dir.x+rad(1), camera_dir.y, camera_dir.z); break;
                     case SDL_SCANCODE_LEFT: scene.camera.updaterot(camera_dir.x-rad(1), camera_dir.y, camera_dir.z); break;
+
+                    case SDL_SCANCODE_H: scene.object.rotate = vec3d(object_rot.x-rad(1), object_rot.y, object_rot.z); break;
+                    case SDL_SCANCODE_L: scene.object.rotate = vec3d(object_rot.x+rad(1), object_rot.y, object_rot.z); break;
+                    case SDL_SCANCODE_K: scene.object.rotate = vec3d(object_rot.x, object_rot.y-rad(1), object_rot.z); break;
+                    case SDL_SCANCODE_J: scene.object.rotate = vec3d(object_rot.x, object_rot.y+rad(1), object_rot.z); break;
+                    case SDL_SCANCODE_U: scene.object.rotate = vec3d(object_rot.x, object_rot.y, object_rot.z-rad(1)); break;
+                    case SDL_SCANCODE_I: scene.object.rotate = vec3d(object_rot.x, object_rot.y, object_rot.z+rad(1)); break;
 
                     default: break;
                 }

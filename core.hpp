@@ -88,6 +88,51 @@ struct mat4x4 {
 
 		return result;
 	}
+
+	// the below two functions return the matrix that, when multiplied to a vector, transforms it accordingly.
+	static mat4x4 getfromrot(vec3d rot, vec3d center) {
+		/* get rotation matrix with regard to the center */
+		double cy = cos(rot.x), sy = sin(rot.x);
+		double cp = cos(rot.y), sp = sin(rot.y);
+		double cr = cos(rot.z), sr = sin(rot.z);
+
+		double Rx =  cy*cr + sy*sp*sr;
+		double Ry =       cp*sr;
+		double Rz = -sy*cr + cy*sp*sr;
+
+		double Ux = -cy*sr + sy*sp*cr;
+		double Uy =        cp*cr;
+		double Uz =  sy*sr + cy*sp*cr;
+
+		double Fx =  sy*cp;
+		double Fy = -sp;
+		double Fz =  cy*cp;
+
+		mat4x4 ret = {};
+		ret.m[0][0] = Rx; ret.m[0][1] = Ux; ret.m[0][2] = Fx;
+		ret.m[1][0] = Ry; ret.m[1][1] = Uy; ret.m[1][2] = Fy;
+		ret.m[2][0] = Rz; ret.m[2][1] = Uz; ret.m[2][2] = Fz;
+
+		ret.m[0][3] = center.x - (ret.m[0][0] * center.x + ret.m[0][1] * center.y + ret.m[0][2] * center.z);
+		ret.m[1][3] = center.y - (ret.m[1][0] * center.x + ret.m[1][1] * center.y + ret.m[1][2] * center.z);
+		ret.m[2][3] = center.z - (ret.m[2][0] * center.x + ret.m[2][1] * center.y + ret.m[2][2] * center.z);
+		ret.m[3][3] = 1.0;
+		return ret;
+	}
+	
+	static mat4x4 getfromtrans(vec3d trans) {
+		/* get translation matrix */
+		mat4x4 ret = {};
+		ret.m[0][0] = 1.0;
+		ret.m[1][1] = 1.0;
+		ret.m[2][2] = 1.0;
+		ret.m[3][3] = 1.0;
+		ret.m[0][3] = trans.x;
+		ret.m[1][3] = trans.y;
+		ret.m[2][3] = trans.z;
+		return ret;
+	}
+
 };
 
 struct rgb {
@@ -201,15 +246,32 @@ struct mesh {
 
 struct actor {
 	mesh *model;
-	vec3d translate;
-	vec3d rotate;
+	vec3d translate; /* location of center */
+	vec3d rotate; /* yaw/pitch/roll rotational state, similar to that of Camera */
 	double scale;
 
 	actor(mesh *m) {
 		this->model = m;
+		this->translate = vec3d();
+		this->rotate = vec3d();
+		this->scale = 1.0;
 	}
 
-	vec3d apply(vec3d); /* to be added later */
+	vec3d apply(const vec3d &in){
+		/* to be added later */
+		return mat4x4::getfromrot(rotate, translate) * (mat4x4::getfromtrans(translate) * in);
+	} 
+
+	vector<triangle3d> gettri() {
+		vector<triangle3d> list{};
+		for (triangle face : model->faces) {
+			vec3d v1 = (model->vertexes)[face.i1];
+			vec3d v2 = (model->vertexes)[face.i2];
+			vec3d v3 = (model->vertexes)[face.i3];
+			list.push_back(triangle3d(apply(v1), apply(v2), apply(v3)));
+		}
+		return list;
+	}
 };
 
 void matprint(mat4x4 m);
@@ -487,10 +549,16 @@ class Scene {
 			vector<triangle3d> ret;
 			mat4x4 view = camera.getview();
 			double znear = camera.getznear();
+			/*
 			for (triangle face : object.model->faces) {
 				vec3d v1 = (object.model->vertexes)[face.i1] * DEV_SCALE_MESH;
 				vec3d v2 = (object.model->vertexes)[face.i2] * DEV_SCALE_MESH;
 				vec3d v3 = (object.model->vertexes)[face.i3] * DEV_SCALE_MESH;
+				*/
+			for (triangle3d face : object.gettri()) {
+				vec3d v1 = face.p[0];
+				vec3d v2 = face.p[1];
+				vec3d v3 = face.p[2];
 
 				/* very patchy solution for too-close triangles, revise later */
 				if ((view * v1).z >= -znear || (view * v2).z >= -znear || (view * v3).z >= -znear) continue;
