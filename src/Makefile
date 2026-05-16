@@ -3,6 +3,9 @@ SHELL := /bin/sh
 CXX := clang++
 SDL_CFLAGS := $(shell sdl2-config --cflags)
 SDL_LIBS := $(shell sdl2-config --libs)
+
+LUA_CFLAGS := $(shell pkg-config --cflags lua)
+LUA_LIBS := $(shell pkg-config --libs lua)
 CXXFLAGS := -Wno-deprecated-declarations
 
 GREEN := \033[1;92m
@@ -23,14 +26,14 @@ core.o: core.cpp core.hpp
 
 main.o: main.cpp core.hpp core.cpp
 	@printf "$(GREEN)%12s$(NC) $(WHITE)%s$(NC)\n" "Compiling" "main.cpp"
-	@printf "$(GREY)%s$(NC)\n" "$(CXX) $(SDL_CFLAGS) $(CXXFLAGS) -c main.cpp"; \
-	$(CXX) $(SDL_CFLAGS) $(CXXFLAGS) -c main.cpp; status=$$?; \
+	@printf "$(GREY)%s$(NC)\n" "$(CXX) $(SDL_CFLAGS) $(CXXFLAGS)  $(LUA_CFLAGS) $(LUA_LIBS) -c main.cpp"; \
+	$(CXX) $(SDL_CFLAGS) $(CXXFLAGS) $(LUA_CFLAGS) $(LUA_LIBS) -c main.cpp; status=$$?; \
 	if [ $$status -eq 0 ]; then printf "$(CLEAR_LINE)"; else exit $$status; fi
 
 rengine: main.o core.o
 	@printf "$(GREEN)%12s$(NC) $(WHITE)%s$(NC)\n" "Linking" "rengine"
-	@printf "$(GREY)%s$(NC)\n" "$(CXX) $(SDL_CFLAGS) $(SDL_LIBS) main.o core.o -o rengine"; \
-	$(CXX) $(SDL_CFLAGS) $(SDL_LIBS) main.o core.o -o rengine; status=$$?; \
+	@printf "$(GREY)%s$(NC)\n" "$(CXX) $(SDL_CFLAGS) $(SDL_LIBS) $(LUA_LIBS) main.o core.o -o rengine"; \
+	$(CXX) $(SDL_CFLAGS) $(SDL_LIBS) $(LUA_LIBS) main.o core.o -o rengine; status=$$?; \
 	if [ $$status -eq 0 ]; then printf "$(CLEAR_LINE)"; else exit $$status; fi
 
 finished:
