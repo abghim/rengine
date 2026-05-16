@@ -182,6 +182,10 @@ struct mesh {
 	vector<vec3d> vertexes;
 	vector<triangle> faces;
 
+	mesh() {
+
+	}
+
 	/* modified from javidx9's console 3d graphics engine (https://github.com/OneLoneCoder/Javidx9/blob/master/ConsoleGameEngine/BiggerProjects/Engine3D/OneLoneCoder_olcEngine3D_Part2.cpp) */
 	mesh(const char *filename)
 	{
@@ -245,12 +249,12 @@ struct mesh {
 };
 
 struct actor {
-	mesh *model;
+	mesh model;
 	vec3d translate; /* location of center */
 	vec3d rotate; /* yaw/pitch/roll rotational state, similar to that of Camera */
 	double scale;
 
-	actor(mesh *m) {
+	actor(mesh m) {
 		this->model = m;
 		this->translate = vec3d();
 		this->rotate = vec3d();
@@ -264,10 +268,10 @@ struct actor {
 
 	vector<triangle3d> gettri() {
 		vector<triangle3d> list{};
-		for (triangle face : model->faces) {
-			vec3d v1 = (model->vertexes)[face.i1];
-			vec3d v2 = (model->vertexes)[face.i2];
-			vec3d v3 = (model->vertexes)[face.i3];
+		for (triangle face : model.faces) {
+			vec3d v1 = (model.vertexes)[face.i1];
+			vec3d v2 = (model.vertexes)[face.i2];
+			vec3d v3 = (model.vertexes)[face.i3];
 			list.push_back(triangle3d(apply(v1), apply(v2), apply(v3)));
 		}
 		return list;
@@ -499,28 +503,28 @@ struct screen {
 class Scene {
 
 	public:
-		actor object;
 		Camera camera;
 		Shader shader;
 		screen display;
+		vector<actor> actors;
 
 		/* simple obj viewer (no complex scene, no actor transforms) */
-		Scene(mesh *meshobj, /* cameara */ double x, double y, double z, double yaw, double pitch, double roll,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */) 
-			: camera(x, y, z, yaw, pitch, roll, fov, znear, zfar, width, height), object(meshobj), shader(), display(width, height){
+		Scene(/* camera */ double x, double y, double z, double yaw, double pitch, double roll,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */) 
+			: camera(x, y, z, yaw, pitch, roll, fov, znear, zfar, width, height), shader(), display(width, height){
             // printf("Scene object initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
 		}
 
-		Scene(mesh *meshobj, /* cameara */ vec3d pos, vec3d rot,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */)
-			: camera(pos, rot, fov, znear, zfar, width, height), object(meshobj), shader(), display(width, height) {
+		Scene(/* cameara */ vec3d pos, vec3d rot,  double fov, double znear, double zfar, double width, double height /* no shader settings (yet) */)
+			: camera(pos, rot, fov, znear, zfar, width, height), shader(), display(width, height) {
 		    // printf("Scene initialized at <%p>: actor <%p>, camera <%p>, shader <%p>\n", this, &(this->object), &(this->camera), &(this->shader));
 		}
 
-		/* query scene */
-		bool query()
-		{
-		    return 0;
+		void addmesh(const char *filename) {
+			mesh temp(filename);
+			actors.push_back(actor(temp));
 		}
 
+		/*
 		void frame(screen &viewport)
 		{
             int i = 1;
@@ -531,8 +535,9 @@ class Scene {
                 printf("\t"); camera.apply((object.model->vertexes)[face.i3]).print2d();
             } return;
 		}
-
-		void _showscene /* dev option: don't have SDL visualizer yet, output to file instead => no longer relevant */ ()
+		*/
+/*
+		void _showscene ()
 		{
 		    std::cout << camera.getwidth() << '\n';
 			std::cout << camera.getheight() << '\n';
@@ -542,6 +547,7 @@ class Scene {
                 camera.apply((object.model->vertexes)[face.i3]).print2d();
             } return;
 		}
+		*/
 
 		vector<triangle3d> tris()
 		{
@@ -555,24 +561,26 @@ class Scene {
 				vec3d v2 = (object.model->vertexes)[face.i2] * DEV_SCALE_MESH;
 				vec3d v3 = (object.model->vertexes)[face.i3] * DEV_SCALE_MESH;
 				*/
-			for (triangle3d face : object.gettri()) {
-				vec3d v1 = face.p[0];
-				vec3d v2 = face.p[1];
-				vec3d v3 = face.p[2];
+			for (actor object : actors) {
+				for (triangle3d face : object.gettri()) {
+					vec3d v1 = face.p[0];
+					vec3d v2 = face.p[1];
+					vec3d v3 = face.p[2];
 
-				/* very patchy solution for too-close triangles, revise later */
-				if ((view * v1).z >= -znear || (view * v2).z >= -znear || (view * v3).z >= -znear) continue;
+					/* very patchy solution for too-close triangles, revise later */
+					if ((view * v1).z >= -znear || (view * v2).z >= -znear || (view * v3).z >= -znear) continue;
 
-				/* back face culling */
-				if (dot(camera.getpos()-v1, calculateUnitNormal(v1, v2, v3)) < 0) continue;
-				
+					/* back face culling */
+					if (dot(camera.getpos()-v1, calculateUnitNormal(v1, v2, v3)) < 0) continue;
+					
 
-			    vec3d vs[3];
-	                vs[0] = camera.apply(v1);
-	                vs[1]= camera.apply(v2);
-	                vs[2] = camera.apply(v3);
-	                ret.push_back(triangle3d(vs[0], vs[1], vs[2], shader.apply(v1, v2, v3, camera.getpos())));
-					 /* shading :) finally */
+					vec3d vs[3];
+						vs[0] = camera.apply(v1);
+						vs[1]= camera.apply(v2);
+						vs[2] = camera.apply(v3);
+						ret.push_back(triangle3d(vs[0], vs[1], vs[2], shader.apply(v1, v2, v3, camera.getpos())));
+						 /* shading :) finally */
+				}
             } return ret;
 		}
 
