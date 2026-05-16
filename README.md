@@ -3,7 +3,7 @@
 3D rendering engine written in C++, using SDL2 for primitive graphics. The rendering logic is built from scratch, without 3D libraries such as OpenGL.
 
 ### May 13th
-Z-buffering, pixel-level shading with SDL textures, simple shading
+Z-buffering, pixel-level rendering with SDL textures, simple shading
 <img width="1552" height="974" alt="image" src="https://github.com/user-attachments/assets/b5e68267-1770-446a-b715-85a970345dad" />
 
 
