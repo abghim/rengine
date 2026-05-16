@@ -13,7 +13,7 @@
 #include <vector>
 #include <stdlib.h>
 
-#define DEV_SCALE_MESH 1.3
+#define DEV_SCALE_MESH 0.7
 #define BLACK rgb()
 
 using std::ifstream;
@@ -567,6 +567,12 @@ class Scene {
 			int upper_start = (int) std::ceil(mid.y);
 			int upper_end = (int) std::floor(top.y);
 
+			if (upper_end < 0 || lower_start >= display.height) return;
+			if (lower_start < 0) lower_start = 0;
+			if (upper_start < 0) upper_start = 0;
+			if (upper_start > display.height) upper_start = display.height;
+			if (upper_end >= display.height) upper_end = display.height - 1;
+
 			for (int y=lower_start; y<upper_start; y++) {
 				int left = getx(top, bottom, y);
 				int right = getx(bottom, mid, y);
@@ -582,6 +588,10 @@ class Scene {
 					std::swap(left, right);
 					std::swap(invz_left, invz_right);
 				}
+
+				if (right < 0 || left >= display.width) continue;
+				if (left < 0) left = 0;
+				if (right >= display.width) right = display.width - 1;
 				
 				for (int x=left; x<=right; x++) {
 					double h;
@@ -615,6 +625,10 @@ class Scene {
 					std::swap(left, right);
 					std::swap(invz_left, invz_right);
 				}
+
+				if (right < 0 || left >= display.width) continue;
+				if (left < 0) left = 0;
+				if (right >= display.width) right = display.width - 1;
 				
 				for (int x=left; x<=right; x++) {
 					double h;
