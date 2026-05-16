@@ -10,7 +10,7 @@ int main()
     /* tests -> vectors */
 
     Scene scene(2, 4, 6, rad(17), rad(-10), rad(5), rad(80), 0.1, 1500, 1440, 830);
-	scene.addmesh("tie.obj");
+	scene.addmesh("assets/tie.obj");
     screen &viewport1 = scene.display;
 
     vec3d camera_pos = scene.camera.getpos();
