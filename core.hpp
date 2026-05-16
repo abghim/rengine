@@ -13,7 +13,7 @@
 #include <vector>
 #include <stdlib.h>
 
-#define DEV_SCALE_MESH 0.7
+#define DEV_SCALE_MESH 1.0
 #define BLACK rgb()
 
 using std::ifstream;
@@ -495,11 +495,16 @@ class Scene {
 				/* very patchy solution for too-close triangles, revise later */
 				if ((view * v1).z >= -znear || (view * v2).z >= -znear || (view * v3).z >= -znear) continue;
 
+				/* back face culling */
+				if (dot(camera.getpos()-v1, calculateUnitNormal(v1, v2, v3)) < 0) continue;
+				
+
 			    vec3d vs[3];
 	                vs[0] = camera.apply(v1);
 	                vs[1]= camera.apply(v2);
 	                vs[2] = camera.apply(v3);
 	                ret.push_back(triangle3d(vs[0], vs[1], vs[2], shader.apply(v1, v2, v3, camera.getpos())));
+					 /* shading :) finally */
             } return ret;
 		}
 
