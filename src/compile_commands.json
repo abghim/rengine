@@ -1,13 +1,25 @@
 [
   {
+    "file": "main.cpp",
     "arguments": [
       "/usr/bin/clang++",
       "-I/opt/homebrew/include/SDL2",
       "-D_THREAD_SAFE",
+      "-Wno-deprecated-declarations",
+      "-I/opt/homebrew/include/lua",
       "-c",
       "main.cpp"
     ],
-    "directory": "/Users/aiden/Desktop/hacking/rengine",
-    "file": "/Users/aiden/Desktop/hacking/rengine/main.cpp"
+    "directory": "/Users/aiden/Desktop/hacking/rengine/src"
+  },
+  {
+    "file": "core.cpp",
+    "arguments": [
+      "/usr/bin/clang++",
+      "-Wno-deprecated-declarations",
+      "-c",
+      "core.cpp"
+    ],
+    "directory": "/Users/aiden/Desktop/hacking/rengine/src"
   }
 ]
